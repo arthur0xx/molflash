@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS products (
   is_featured INTEGER NOT NULL DEFAULT 0,
   is_active INTEGER NOT NULL DEFAULT 1,
   sold_count INTEGER NOT NULL DEFAULT 0,
+  fields TEXT NOT NULL DEFAULT '[]',
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   FOREIGN KEY (category_id) REFERENCES categories(id)
 );
@@ -67,6 +68,7 @@ CREATE TABLE IF NOT EXISTS order_items (
   name TEXT NOT NULL,
   price REAL NOT NULL,
   quantity INTEGER NOT NULL DEFAULT 1,
+  answers TEXT NOT NULL DEFAULT '{}',
   FOREIGN KEY (order_id) REFERENCES orders(id),
   FOREIGN KEY (product_id) REFERENCES products(id)
 );
@@ -110,5 +112,12 @@ CREATE TABLE IF NOT EXISTS settings (
   value TEXT DEFAULT ''
 );
 `);
+
+function ensureColumn(table, col, ddl) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all().map(c => c.name);
+  if (!cols.includes(col)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${ddl}`);
+}
+ensureColumn('products', 'fields', "TEXT NOT NULL DEFAULT '[]'");
+ensureColumn('order_items', 'answers', "TEXT NOT NULL DEFAULT '{}'");
 
 export default db;

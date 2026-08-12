@@ -113,7 +113,16 @@ export default function Profile() {
                   <b>طلب #{o.id}</b>
                   <span className={`status-pill ${STATUS[o.status]?.cls}`}>{STATUS[o.status]?.text}</span>
                 </div>
-                <div className="order-items">{o.items.map(i => <span key={i.id}>• {i.name} ×{i.quantity}</span>)}</div>
+                <div className="order-items">
+                  {o.items.map(i => (
+                    <div key={i.id} className="order-item">
+                      <span>• {i.name} ×{i.quantity}</span>
+                      {Object.keys(i.answers || {}).length > 0 && (
+                        <span className="order-answers">({Object.entries(i.answers).map(([k, v]) => `${k}: ${v}`).join(' · ')})</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
                 <div className="order-bottom">
                   <span className="muted">{o.created_at.replace('T', ' ')}</span>
                   <b>{o.total} درهم</b>

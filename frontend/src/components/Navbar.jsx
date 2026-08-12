@@ -12,7 +12,7 @@ export default function Navbar() {
       <div className="container nav-inner">
         <Link to="/" className="brand">
           <span className="brand-logo">⚡</span>
-          <span className="brand-name">أكواد <b>تيك</b></span>
+          <span className="brand-name"><b>chrigsm</b></span>
         </Link>
         <nav className="nav-links">
           <NavLink to="/" end>الرئيسية</NavLink>

@@ -39,7 +39,7 @@ export default function Home() {
       <section className="hero">
         <div className="container hero-inner">
           <div className="hero-text">
-            <h1>متجر <span>أكواد تيك</span></h1>
+            <h1>متجر <span>chrigsm</span></h1>
             <p>تفعيلات فورية لعِراق سيرفر وحلا تيك والتطبيقات والألعاب، أكواد تعبئة، واشتراكات — تسليم سريع ودفع آمن عبر محفظتك.</p>
             <div className="hero-cta">
               <Link to="/shop" className="btn btn-light btn-lg">تسوّق الآن</Link>

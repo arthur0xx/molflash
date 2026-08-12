@@ -3,6 +3,7 @@ import db from '../db.js';
 import { adminAuth } from './auth.js';
 import { orderDetails, orderStatusText } from './orders.js';
 import { addNotification, waLinkTo, orderStatusMessage } from '../notify.js';
+import { parseFields, normalizeFields } from '../util.js';
 
 const router = Router();
 
@@ -21,30 +22,32 @@ router.get('/stats', adminAuth, (req, res) => {
 router.get('/products', adminAuth, (req, res) => {
   const rows = db.prepare(`SELECT p.*, c.name AS category_name FROM products p
     JOIN categories c ON c.id = p.category_id ORDER BY p.id DESC`).all();
-  res.json(rows);
+  res.json(rows.map(p => ({ ...p, fields: parseFields(p) })));
 });
 
 router.post('/products', adminAuth, (req, res) => {
   const p = req.body || {};
   if (!p.name || !p.category_id || !Number(p.price))
     return res.status(400).json({ error: 'الاسم والتصنيف والسعر مطلوبة' });
-  const r = db.prepare(`INSERT INTO products (category_id, name, description, price, old_price, emoji, gradient, is_featured, is_active)
-    VALUES (?,?,?,?,?,?,?,?,?)`).run(
+  const r = db.prepare(`INSERT INTO products (category_id, name, description, price, old_price, emoji, gradient, is_featured, is_active, fields)
+    VALUES (?,?,?,?,?,?,?,?,?,?)`).run(
       Number(p.category_id), String(p.name), p.description || '', Number(p.price),
       p.old_price ? Number(p.old_price) : null, p.emoji || '🎁',
       p.gradient || 'linear-gradient(135deg,#7c3aed,#4f46e5)',
-      p.is_featured ? 1 : 0, p.is_active ? 1 : 0);
+      p.is_featured ? 1 : 0, p.is_active === undefined ? 1 : (p.is_active ? 1 : 0),
+      JSON.stringify(normalizeFields(p.fields)));
   res.json({ id: r.lastInsertRowid });
 });
 
 router.put('/products/:id', adminAuth, (req, res) => {
   const p = req.body || {};
   db.prepare(`UPDATE products SET category_id=?, name=?, description=?, price=?, old_price=?,
-    emoji=?, gradient=?, is_featured=?, is_active=? WHERE id=?`).run(
+    emoji=?, gradient=?, is_featured=?, is_active=?, fields=? WHERE id=?`).run(
       Number(p.category_id), String(p.name), p.description || '', Number(p.price),
       p.old_price ? Number(p.old_price) : null, p.emoji || '🎁',
       p.gradient || 'linear-gradient(135deg,#7c3aed,#4f46e5)',
-      p.is_featured ? 1 : 0, p.is_active ? 1 : 0, Number(req.params.id));
+      p.is_featured ? 1 : 0, p.is_active ? 1 : 0,
+      JSON.stringify(normalizeFields(p.fields)), Number(req.params.id));
   res.json({ ok: true });
 });
 
@@ -118,7 +121,10 @@ router.get('/orders', adminAuth, (req, res) => {
   const params = status && status !== 'all' ? [status] : [];
   const rows = db.prepare(`SELECT o.*, u.name AS user_name, u.phone AS user_phone
     FROM orders o JOIN users u ON u.id = o.user_id ${where} ORDER BY o.id DESC LIMIT 200`).all(...params);
-  res.json(rows.map(o => ({ ...o, status_text: orderStatusText(o.status) })));
+  res.json(rows.map(o => {
+    const { items, itemsText } = orderDetails(o);
+    return { ...o, status_text: orderStatusText(o.status), items, itemsText };
+  }));
 });
 
 router.put('/orders/:id/status', adminAuth, (req, res) => {

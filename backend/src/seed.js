@@ -63,7 +63,7 @@ export default function seed() {
   db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('whatsapp_number', '212600000000')").run();
   db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('whatsapp_api', '')").run();
   db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('currency', 'درهم')").run();
-  db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('store_name', 'أكواد تيك')").run();
+  db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('store_name', 'chrigsm')").run();
 
   console.log('✅ تم تجهيز قاعدة البيانات ببيانات تجريبية');
 }

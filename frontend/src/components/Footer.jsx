@@ -5,7 +5,7 @@ export default function Footer() {
     <footer className="footer">
       <div className="container footer-inner">
         <div>
-          <div className="brand-name">⚡ أكواد <b>تيك</b></div>
+          <div className="brand-name">⚡ <b>chrigsm</b></div>
           <p className="muted">متجرك الموثوق لأدوات التفعيل والتعبئة - تسليم فوري ودعم عبر واتساب.</p>
         </div>
         <div>
@@ -19,7 +19,7 @@ export default function Footer() {
           <span className="muted">رد خلال دقائق ⏱️</span>
         </div>
       </div>
-      <div className="footer-bottom">© {new Date().getFullYear()} أكواد تيك - جميع الحقوق محفوظة</div>
+      <div className="footer-bottom">© {new Date().getFullYear()} chrigsm - جميع الحقوق محفوظة</div>
     </footer>
   );
 }

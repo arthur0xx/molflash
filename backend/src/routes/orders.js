@@ -2,6 +2,7 @@ import { Router } from 'express';
 import db from '../db.js';
 import { auth } from './auth.js';
 import { addNotification, newOrderToAdmin, waLink } from '../notify.js';
+import { parseFields, parseAnswers } from '../util.js';
 
 const router = Router();
 
@@ -10,8 +11,16 @@ const STATUS_AR = { pending: 'قيد المعالجة', success: 'تم التس�
 export const orderStatusText = (s) => STATUS_AR[s] || s;
 
 export function orderDetails(order) {
-  const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id);
-  const itemsText = items.map(i => `• ${i.name} ×${i.quantity} — ${i.price} درهم`).join('\n');
+  const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id).map(i => ({
+    ...i,
+    answers: parseAnswers(i),
+  }));
+  const itemsText = items.map(i => {
+    const a = Object.entries(i.answers).length
+      ? `\n    ${Object.entries(i.answers).map(([k, v]) => `${k}: ${v}`).join(' | ')}`
+      : '';
+    return `• ${i.name} ×${i.quantity} — ${i.price} درهم${a}`;
+  }).join('\n');
   return { order, items, itemsText };
 }
 
@@ -43,16 +52,27 @@ router.post('/orders', auth, (req, res) => {
       const p = db.prepare('SELECT * FROM products WHERE id = ? AND is_active = 1').get(Number(it.product_id));
       if (!p) throw new Error(`منتج غير متوفر: ${it.product_id}`);
       const qty = Math.max(1, Number(it.quantity) || 1);
+      const fields = parseFields(p);
+      const answers = it.answers && typeof it.answers === 'object' ? it.answers : {};
+      for (const f of fields) {
+        if (f.required && !String(answers[f.key] || '').trim())
+          throw new Error(`المرجو تعبئة حقل "${f.label}" لمنتج "${p.name}"`);
+      }
+      const storedAnswers = {};
+      for (const f of fields) {
+        if (answers[f.key] !== undefined && String(answers[f.key]).trim() !== '')
+          storedAnswers[f.label] = String(answers[f.key]).trim();
+      }
       total += p.price * qty;
-      orderRows.push({ product_id: p.id, name: p.name, price: p.price, quantity: qty });
+      orderRows.push({ product_id: p.id, name: p.name, price: p.price, quantity: qty, answers: JSON.stringify(storedAnswers) });
     }
     if (total > req.user.balance) throw new Error('رصيد المحفظة غير كافٍ');
 
     const r = db.prepare('INSERT INTO orders (user_id, total, note) VALUES (?,?,?)')
       .run(req.user.id, total, note || '');
     const orderId = r.lastInsertRowid;
-    const ins = db.prepare('INSERT INTO order_items (order_id, product_id, name, price, quantity) VALUES (?,?,?,?,?)');
-    for (const oi of orderRows) ins.run(orderId, oi.product_id, oi.name, oi.price, oi.quantity);
+    const ins = db.prepare('INSERT INTO order_items (order_id, product_id, name, price, quantity, answers) VALUES (?,?,?,?,?,?)');
+    for (const oi of orderRows) ins.run(orderId, oi.product_id, oi.name, oi.price, oi.quantity, oi.answers);
 
     db.prepare('UPDATE users SET balance = balance - ? WHERE id = ?').run(total, req.user.id);
     db.prepare("INSERT INTO wallet_transactions (user_id, amount, type, method, description) VALUES (?,?,?,?,?)")

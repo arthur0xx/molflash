@@ -364,6 +364,24 @@ input, select, textarea { font-family: inherit; font-size: 0.95rem; }
 .settings-hint p { margin: 6px 0; }
 .admin-login-card h1 { text-align: center; }
 
+/* Fields builder (admin) + service fields (checkout/orders) */
+.fields-builder {
+  width: 100%; background: #faf7ff; border: 1px dashed var(--primary-3);
+  border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 8px;
+}
+.fields-builder h4 { font-size: 0.95rem; }
+.field-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.field-row .input-sm { flex: 1; min-width: 140px; }
+.co-item { background: #fff; border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; box-shadow: var(--shadow); }
+.co-fields { margin-top: 10px; border-top: 1px dashed var(--border); padding-top: 10px; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.co-fields h4 { grid-column: 1 / -1; color: var(--primary); font-size: 0.9rem; }
+.field-wrap { display: flex; flex-direction: column; gap: 4px; }
+.field-wrap > span { font-size: 0.82rem; font-weight: 800; }
+.order-item { display: flex; flex-direction: column; }
+.order-answers { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.ans-tag { background: #f3f0fe; color: var(--primary); font-size: 0.75rem; padding: 3px 10px; border-radius: 20px; font-weight: 700; }
+.ans-tag b { color: var(--dark); }
+
 /* Responsive */
 @media (max-width: 900px) {
   .shop-layout { grid-template-columns: 1fr; }

@@ -111,17 +111,31 @@ function Products() {
   const [list, setList] = useState([]);
   const [cats, setCats] = useState([]);
   const [editing, setEditing] = useState(null);
+  const [fields, setFields] = useState([]);
   const load = () => { api('/admin/products').then(setList); api('/admin/categories').then(setCats); };
   useEffect(load, []);
 
   const save = async (e) => {
     e.preventDefault();
     const form = Object.fromEntries(new FormData(e.target));
-    const body = { ...form, price: Number(form.price), old_price: form.old_price ? Number(form.old_price) : null };
+    const body = {
+      ...form, price: Number(form.price), old_price: form.old_price ? Number(form.old_price) : null,
+      fields: fields.map(f => ({ label: f.label, type: f.type, required: f.required })),
+    };
     if (editing) await api(`/admin/products/${editing.id}`, { method: 'PUT', body });
     else await api('/admin/products', { method: 'POST', body });
-    setEditing(null); load();
+    setEditing(null); setFields([]); load();
   };
+
+  const editProduct = (p) => {
+    setEditing(p);
+    setFields((p.fields || []).map(f => ({ label: f.label, type: f.type, required: !!f.required })));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const updateField = (i, patch) => setFields(prev => prev.map((f, idx) => idx === i ? { ...f, ...patch } : f));
+  const addField = () => setFields(prev => [...prev, { label: '', type: 'text', required: true }]);
+  const removeField = (i) => setFields(prev => prev.filter((_, idx) => idx !== i));
 
   return (
     <div className="admin-panel">
@@ -137,8 +151,26 @@ function Products() {
         <textarea className="input" name="description" rows="2" placeholder="الوصف" defaultValue={editing?.description} />
         <label className="check"><input type="checkbox" name="is_featured" defaultChecked={editing?.is_featured} /> مميز</label>
         <label className="check"><input type="checkbox" name="is_active" defaultChecked={editing ? !!editing.is_active : true} /> نشط</label>
+        <div className="fields-builder">
+          <h4>📝 حقول الخدمة (متطلبات الزبون عند الطلب)</h4>
+          <p className="muted small">مثال لمنتج FRP: الجهاز، الموديل، IMEI... أو Email/Password للتفعيلات</p>
+          {fields.length === 0 && <p className="muted small">لا توجد حقول — أضف حقولاً إن كانت الخدمة تتطلب بيانات من الزبون.</p>}
+          {fields.map((f, i) => (
+            <div className="field-row" key={i}>
+              <input className="input input-sm" placeholder="اسم الحقل (مثال: رقم IMEI)" value={f.label}
+                onChange={e => updateField(i, { label: e.target.value })} />
+              <select className="input input-sm" value={f.type} onChange={e => updateField(i, { type: e.target.value })}>
+                <option value="text">نص قصير</option>
+                <option value="textarea">نص طويل</option>
+              </select>
+              <label className="check"><input type="checkbox" checked={f.required} onChange={e => updateField(i, { required: e.target.checked })} /> إجباري</label>
+              <button type="button" className="btn btn-danger btn-sm" onClick={() => removeField(i)}>✕</button>
+            </div>
+          ))}
+          <button type="button" className="btn btn-outline btn-sm" onClick={addField}>+ إضافة حقل</button>
+        </div>
         <button className="btn btn-primary">{editing ? 'حفظ التعديل' : 'إضافة منتج'}</button>
-        {editing && <button type="button" className="btn btn-outline" onClick={() => setEditing(null)}>إلغاء</button>}
+        {editing && <button type="button" className="btn btn-outline" onClick={() => { setEditing(null); setFields([]); }}>إلغاء</button>}
       </form>
 
       <div className="admin-table">
@@ -148,9 +180,12 @@ function Products() {
             <div className="row-main">
               <b>{p.name}</b>
               <span className="muted small">{p.category_name} · {p.price} درهم{p.old_price ? ` / ${p.old_price}` : ''} · {p.sold_count} بيع</span>
+              {(p.fields || []).length > 0 && (
+                <span className="muted small"> · 📝 {(p.fields || []).map(f => f.label).join('، ')}</span>
+              )}
             </div>
             <span className={`status-pill ${p.is_active ? 'success' : 'rejected'}`}>{p.is_active ? 'نشط' : 'مخفي'}</span>
-            <button className="btn btn-outline btn-sm" onClick={() => setEditing(p)}>تعديل</button>
+            <button className="btn btn-outline btn-sm" onClick={() => editProduct(p)}>تعديل</button>
             <button className="btn btn-danger btn-sm" onClick={async () => { if (confirm('حذف هذا المنتج؟')) { await api(`/admin/products/${p.id}`, { method: 'DELETE' }); load(); } }}>حذف</button>
           </div>
         ))}
@@ -237,7 +272,16 @@ function Orders() {
               <b>طلب #{o.id} — {o.user_name} ({o.user_phone})</b>
               <span className="muted small">{o.created_at}</span>
             </div>
-            <div className="order-items">{o.items_text ? o.items_text.split('\n').map((l, i) => <span key={i}>{l}</span>) : null}</div>
+            <div className="order-items">
+              {o.items && o.items.map(it => (
+                <div key={it.id} className="order-item">
+                  <b>{it.name} ×{it.quantity}</b>
+                  {Object.keys(it.answers || {}).length > 0 && (
+                    <div className="order-answers">{Object.entries(it.answers).map(([k, v]) => <span key={k} className="ans-tag">{k}: <b>{v}</b></span>)}</div>
+                  )}
+                </div>
+              ))}
+            </div>
             <b>{o.total} درهم</b>
             <span className={`status-pill ${o.status}`}>{o.status_text}</span>
             <div className="status-actions">

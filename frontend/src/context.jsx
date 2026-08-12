@@ -55,7 +55,7 @@ export function AppProvider({ children }) {
     setCart(prev => {
       const found = prev.find(i => i.product_id === product.id);
       if (found) return prev.map(i => i.product_id === product.id ? { ...i, quantity: i.quantity + quantity } : i);
-      return [...prev, { product_id: product.id, name: product.name, price: product.price, emoji: product.emoji, gradient: product.gradient, quantity }];
+      return [...prev, { product_id: product.id, name: product.name, price: product.price, emoji: product.emoji, gradient: product.gradient, fields: product.fields || [], quantity }];
     });
   }, []);
 

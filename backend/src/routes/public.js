@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import db from '../db.js';
+import { parseFields } from '../util.js';
 
 const router = Router();
 
@@ -7,6 +8,7 @@ const productRow = (p) => ({
   id: p.id, category_id: p.category_id, name: p.name, description: p.description,
   price: p.price, old_price: p.old_price, emoji: p.emoji, gradient: p.gradient,
   is_featured: p.is_featured, is_active: p.is_active, sold_count: p.sold_count,
+  fields: parseFields(p),
   category_name: p.category_name,
 });
 
