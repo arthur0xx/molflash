@@ -729,3 +729,26 @@ body { background: var(--app-canvas); color: var(--app-ink); font-family: 'Cairo
 @media (prefers-reduced-motion: no-preference) {
   .app-product-card, .service-list-card, .category-rail-item, .circle-action { transition-timing-function: cubic-bezier(.23,1,.32,1); }
 }
+
+
+/* Cart icon refinement */
+.cart-heading { display: flex; align-items: center; justify-content: center; position: relative; min-height: 40px; margin-bottom: 18px; }
+.cart-heading h1 { font-size: 1.35rem; font-weight: 900; }
+.cart-back { position: absolute; inset-inline-end: 0; margin: 0; width: 36px; height: 36px; display: grid; place-items: center; border: 1px solid var(--app-line); border-radius: 10px; background: #fff; font-size: 1.15rem; }
+.cart-app-item { grid-template-columns: 48px minmax(0, 1fr) auto; min-height: 88px; padding: 14px; }
+.cart-service-icon { width: 48px; height: 48px; display: grid; place-items: center; border-radius: 12px; background: var(--app-blue-soft); color: var(--app-blue-deep); font-size: 1.35rem; font-weight: 900; }
+.cart-item-copy { min-width: 0; display: grid; gap: 3px; }
+.cart-item-copy a b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #111a27; font-family: Arial, sans-serif; font-size: .95rem; }
+.cart-item-copy small { color: var(--app-muted); font-size: .72rem; }
+.cart-remove { width: fit-content; margin-top: 2px; display: inline-flex; align-items: center; color: #df3e4d; }
+.cart-price-block { display: grid; justify-items: end; align-items: center; gap: 9px; }
+.cart-price-block > strong { color: var(--app-blue-deep); font-family: Arial, sans-serif; font-size: 1rem; white-space: nowrap; }
+.cart-total-bar button { display: inline-flex; align-items: center; gap: 8px; }
+.empty-cart-icon { width: 60px !important; height: 60px !important; }
+@media (max-width: 620px) {
+  .cart-app-item { grid-template-columns: 48px minmax(0, 1fr) auto; gap: 10px; }
+  .cart-price-block { gap: 7px; }
+  .cart-price-block > strong { font-size: .88rem; }
+  .cart-price-block .quantity-control { gap: 4px; padding: 4px; }
+  .cart-price-block .quantity-control button { width: 21px; height: 21px; }
+}
