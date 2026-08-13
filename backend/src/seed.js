@@ -96,11 +96,12 @@ function removeKnownDemoData() {
 function setInitialSettings() {
   const set = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?,?)');
   set.run('store_name', 'ChriGsm');
-  set.run('currency', 'USD');
+  set.run('currency', 'MAD');
   set.run('whatsapp_number', '');
   set.run('whatsapp_api', '');
   set.run('whatsapp_token', '');
   db.prepare("UPDATE settings SET value = 'ChriGsm' WHERE key = 'store_name' AND value IN ('MolFlash', 'chrigsm')").run();
+  db.prepare("UPDATE settings SET value = 'MAD' WHERE key = 'currency'").run();
   set.run('catalog_mode', 'static_import');
   set.run('catalog_imported_at', new Date().toISOString());
 }

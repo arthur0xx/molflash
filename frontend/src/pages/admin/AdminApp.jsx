@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react';
 import { useApp } from '../../context.jsx';
 import { api, waOpen } from '../../api.js';
 import { login as doLogin } from './adminAuth.js';
+import AdminOverview from './AdminOverview.jsx';
+import AdminProducts from './AdminProducts.jsx';
+import AdminCategories from './AdminCategories.jsx';
 
 const STATUS_AR = { pending: 'قيد المعالجة', success: 'تم التسليم ✅', rejected: 'مرفوض ❌' };
 
@@ -66,10 +69,10 @@ export default function AdminApp() {
         <a href="/" className="btn btn-outline btn-sm" target="_self">← العودة للمتجر</a>
       </aside>
       <main className="admin-main">
-        {tab === 'dashboard' && <Dashboard go={setTab} />}
+        {tab === 'dashboard' && <AdminOverview go={setTab} />}
         {tab === 'tools' && <Tools go={setTab} />}
-        {tab === 'products' && <Products />}
-        {tab === 'categories' && <Categories />}
+        {tab === 'products' && <AdminProducts />}
+        {tab === 'categories' && <AdminCategories />}
         {tab === 'orders' && <Orders />}
         {tab === 'users' && <Users />}
         {tab === 'wallet' && <WalletReq />}
@@ -90,7 +93,7 @@ function Dashboard({ go }) {
     ['📦', s.products, 'باقة', () => go('products')],
     ['🖼️', s.readyAssets + ' / ' + (s.readyAssets + s.pendingAssets), 'صور الأدوات', () => go('tools')],
     ['📋', s.orders, 'طلب', () => go('orders')],
-    ['💰', s.revenue + ' USD', 'إيرادات', () => go('orders')],
+    ['💰', s.revenue + ' د.م.', 'إيرادات', () => go('orders')],
     ['⏳', s.pending, 'طلبات قيد المعالجة', () => go('orders')],
     ['🆕', s.today, 'طلبات اليوم', () => go('orders')],
     ['💳', s.pendingWallet, 'تعبئة بانتظار الموافقة', () => go('wallet')],
@@ -201,7 +204,7 @@ function Tools({ go }) {
           {visible.map((tool) => (
             <button key={tool.tool_key} className={`tool-admin-card ${selected?.tool?.tool_key === tool.tool_key ? 'selected' : ''}`} onClick={() => openTool(tool.tool_key)}>
               {tool.asset_status === 'ready' && tool.asset_path ? <img src={tool.asset_path} alt="" /> : <span className="tool-admin-icon" aria-hidden="true">◈</span>}
-              <span className="tool-admin-copy"><b>{tool.tool_name}</b><small>{tool.category_name} · {tool.package_count} باقات · من {tool.price} USD</small></span>
+              <span className="tool-admin-copy"><b>{tool.tool_name}</b><small>{tool.category_name} · {tool.package_count} باقات · من {tool.price} د.م.</small></span>
               <span className={`asset-status ${tool.asset_status === 'ready' ? 'ready' : 'default'}`}>{tool.asset_status === 'ready' ? 'صورة جاهزة' : 'بدون صورة'}</span>
             </button>
           ))}
@@ -230,7 +233,7 @@ function Tools({ go }) {
               </form>
               <div className="tool-package-list">
                 <div className="section-head"><h3>باقات الأداة</h3><span className="muted small">يمكن تعديل السعر والحقول من تبويب الباقات الفردية.</span></div>
-                {selected.packages.map((item) => <div className="tool-package-row" key={item.id}><div><b>{item.package_label || item.name}</b><small>{item.delivery_time || 'حسب الخدمة'} · {(item.fields || []).length} حقول</small></div><strong>{item.price} USD</strong></div>)}
+                {selected.packages.map((item) => <div className="tool-package-row" key={item.id}><div><b>{item.package_label || item.name}</b><small>{item.delivery_time || 'حسب الخدمة'} · {(item.fields || []).length} حقول</small></div><strong>{item.price} د.م.</strong></div>)}
               </div>
             </>
           )}
@@ -280,7 +283,7 @@ function Products() {
         <select className="input" name="category_id" defaultValue={editing?.category_id}>
           {cats.map(c => <option key={c.id} value={c.id}>{c.emoji} {c.name}</option>)}
         </select>
-        <input className="input" type="number" name="price" placeholder="السعر (USD)" defaultValue={editing?.price} required />
+        <input className="input" type="number" name="price" placeholder="السعر (د.م.)" defaultValue={editing?.price} required />
         <input className="input" type="number" name="old_price" placeholder="السعر قبل الخصم (اختياري)" defaultValue={editing?.old_price || ''} />
         <input className="input" name="emoji" placeholder="إيموجي" defaultValue={editing?.emoji || '🎁'} />
         <textarea className="input" name="description" rows="2" placeholder="الوصف" defaultValue={editing?.description} />
@@ -314,7 +317,7 @@ function Products() {
             <span className="row-emoji" style={{ background: p.gradient }}>{p.emoji}</span>
             <div className="row-main">
               <b>{p.name}</b>
-              <span className="muted small">{p.category_name} · {p.price} USD{p.old_price ? ` / ${p.old_price}` : ''} · {p.sold_count} بيع</span>
+              <span className="muted small">{p.category_name} · {p.price} د.م.{p.old_price ? ` / ${p.old_price}` : ''} · {p.sold_count} بيع</span>
               {(p.fields || []).length > 0 && (
                 <span className="muted small"> · 📝 {(p.fields || []).map(f => f.label).join('، ')}</span>
               )}
@@ -417,7 +420,7 @@ function Orders() {
                 </div>
               ))}
             </div>
-            <b>{o.total} USD</b>
+            <b>{o.total} د.م.</b>
             <span className={`status-pill ${o.status}`}>{o.status_text}</span>
             <div className="status-actions">
               <button className="btn btn-success btn-sm" disabled={o.status === 'success'} onClick={() => setStatus(o.id, 'success')}>ناجح</button>
@@ -454,7 +457,7 @@ function Users() {
           <div className="admin-row" key={u.id}>
             <div className="row-main">
               <b>{u.name} ({u.phone})</b>
-              <span className="muted small">{u.orders_count} طلب · رصيد {u.balance} USD</span>
+              <span className="muted small">{u.orders_count} طلب · رصيد {u.balance} د.م.</span>
             </div>
             <div className="inline-form">
               <input className="input input-sm" type="number" placeholder="± مبلغ" value={amounts[u.id] || ''} onChange={e => setAmounts({ ...amounts, [u.id]: e.target.value })} />
@@ -485,7 +488,7 @@ function WalletReq() {
               <b>{w.user_name} ({w.user_phone})</b>
               <span className="muted small">{w.method === 'crypto' ? 'عملة رقمية' : 'تحويل بنكي'}{w.ref ? ' · مرجع: ' + w.ref : ''} · {w.created_at}</span>
             </div>
-            <b className="pos">+{w.amount} USD</b>
+            <b className="pos">+{w.amount} د.م.</b>
             <button className="btn btn-success btn-sm" onClick={async () => { await api(`/admin/wallet/requests/${w.id}/approve`, { method: 'POST' }); load(); }}>موافقة</button>
             <button className="btn btn-danger btn-sm" onClick={async () => { await api(`/admin/wallet/requests/${w.id}/reject`, { method: 'POST' }); load(); }}>رفض</button>
           </div>
@@ -525,7 +528,7 @@ function Vouchers() {
         {list.map(v => (
           <div className="admin-row" key={v.id}>
             <b>{v.code}</b>
-            <b>{v.amount} USD</b>
+            <b>{v.amount} د.م.</b>
             <span className={`status-pill ${v.used ? 'success' : 'pending'}`}>{v.used ? `مستعمل بواسطة ${v.used_by_name}` : 'غير مستعمل'}</span>
           </div>
         ))}
@@ -553,7 +556,7 @@ function Settings() {
         <label className="field-label">اسم المتجر</label>
         <input className="input" name="store_name" defaultValue={s.store_name} />
         <label className="field-label">عملة العرض</label>
-        <select className="input" name="currency" defaultValue={s.currency || 'USD'}><option value="USD">USD</option><option value="MAD">MAD</option><option value="EUR">EUR</option></select>
+        <select className="input" name="currency" defaultValue="MAD"><option value="MAD">الدرهم المغربي (د.م.)</option></select>
         <label className="field-label">رقم واتساب (مثال: 0612345678)</label>
         <input className="input" name="whatsapp_number" defaultValue={s.whatsapp_number} dir="ltr" />
         <label className="field-label">رابط API الواتساب (اختياري — بوابات مثل GreenAPI / UltraMsg)</label>

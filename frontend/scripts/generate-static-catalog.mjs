@@ -156,7 +156,7 @@ const catalog = {
   products,
   tools,
   featured: tools.filter((tool) => tool.is_featured).slice(0, 12),
-  settings: { store_name: 'ChriGsm', currency: 'USD', catalog_mode: 'demo_preview' },
+  settings: { store_name: 'ChriGsm', currency: 'MAD', catalog_mode: 'demo_preview' },
 };
 
 fs.mkdirSync(outputDir, { recursive: true });

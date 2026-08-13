@@ -137,5 +137,6 @@ ensureColumn('products', 'package_label', "TEXT DEFAULT ''");
 ensureColumn('products', 'asset_status', "TEXT DEFAULT 'default'");
 ensureColumn('products', 'asset_path', "TEXT DEFAULT ''");
 ensureColumn('order_items', 'answers', "TEXT NOT NULL DEFAULT '{}'");
+ensureColumn('categories', 'icon_url', "TEXT DEFAULT ''");
 
 export default db;

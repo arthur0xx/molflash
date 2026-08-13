@@ -35,7 +35,8 @@ router.get('/stats', adminAuth, (req, res) => {
   const pending = db.prepare("SELECT COUNT(*) c FROM orders WHERE status = 'pending'").get().c;
   const today = db.prepare("SELECT COUNT(*) c FROM orders WHERE date(created_at) = date('now')").get().c;
   const pendingWallet = db.prepare("SELECT COUNT(*) c FROM wallet_transactions WHERE type='credit' AND status='pending'").get().c;
-  res.json({ users, products, tools, readyAssets, pendingAssets, orders, revenue, pending, today, pendingWallet });
+  const walletBalances = db.prepare("SELECT COALESCE(SUM(balance), 0) s FROM users WHERE role = 'customer'").get().s;
+  res.json({ users, products, tools, readyAssets, pendingAssets, orders, revenue, pending, today, pendingWallet, walletBalances });
 });
 
 // ---------- Tools (one visual identity, multiple packages) ----------
@@ -177,29 +178,57 @@ router.delete('/products/:id', adminAuth, (req, res) => {
 
 // ---------- Categories ----------
 router.get('/categories', adminAuth, (req, res) => {
-  res.json(db.prepare('SELECT * FROM categories ORDER BY sort_order').all());
+  const rows = db.prepare(`SELECT c.*, COUNT(p.id) AS product_count
+    FROM categories c LEFT JOIN products p ON p.category_id = c.id
+    GROUP BY c.id ORDER BY c.sort_order, c.id`).all();
+  res.json(rows);
 });
+
+function normalizeCategoryIcon(value) {
+  const iconUrl = String(value || '').trim();
+  if (!iconUrl) return '';
+  if (/^(https?:\/\/|data:image\/)/i.test(iconUrl)) return iconUrl;
+  throw new Error('رابط الأيقونة يجب أن يكون رابط https أو ملف صورة مرفوعًا');
+}
 
 router.post('/categories', adminAuth, (req, res) => {
   const c = req.body || {};
   if (!c.name) return res.status(400).json({ error: 'اسم التصنيف مطلوب' });
-  const r = db.prepare('INSERT INTO categories (name, emoji, description, sort_order) VALUES (?,?,?,?)')
-    .run(String(c.name), c.emoji || '🛍️', c.description || '', Number(c.sort_order) || 0);
-  res.json({ id: r.lastInsertRowid });
+  try {
+    const r = db.prepare('INSERT INTO categories (name, emoji, icon_url, description, sort_order) VALUES (?,?,?,?,?)')
+      .run(String(c.name).trim(), c.emoji || '🛍️', normalizeCategoryIcon(c.icon_url), c.description || '', Number(c.sort_order) || 0);
+    res.json({ id: r.lastInsertRowid });
+  } catch (error) { res.status(400).json({ error: error.message }); }
 });
 
 router.put('/categories/:id', adminAuth, (req, res) => {
   const c = req.body || {};
-  db.prepare('UPDATE categories SET name=?, emoji=?, description=?, sort_order=? WHERE id=?')
-    .run(String(c.name), c.emoji || '🛍️', c.description || '', Number(c.sort_order) || 0, Number(req.params.id));
-  res.json({ ok: true });
+  const existing = db.prepare('SELECT * FROM categories WHERE id = ?').get(Number(req.params.id));
+  if (!existing) return res.status(404).json({ error: 'التصنيف غير موجود' });
+  try {
+    db.prepare('UPDATE categories SET name=?, emoji=?, icon_url=?, description=?, sort_order=? WHERE id=?')
+      .run(String(c.name || existing.name).trim(), c.emoji || '🛍️', normalizeCategoryIcon(c.icon_url), c.description || '', Number(c.sort_order) || 0, existing.id);
+    res.json({ ok: true });
+  } catch (error) { res.status(400).json({ error: error.message }); }
 });
 
 router.delete('/categories/:id', adminAuth, (req, res) => {
-  const count = db.prepare('SELECT COUNT(*) c FROM products WHERE category_id = ?').get(Number(req.params.id)).c;
-  if (count > 0) return res.status(400).json({ error: 'لا يمكن حذف تصنيف يحتوي منتجات' });
-  db.prepare('DELETE FROM categories WHERE id = ?').run(Number(req.params.id));
-  res.json({ ok: true });
+  const categoryId = Number(req.params.id);
+  const category = db.prepare('SELECT * FROM categories WHERE id = ?').get(categoryId);
+  if (!category) return res.status(404).json({ error: 'التصنيف غير موجود' });
+  const confirmationName = String(req.body?.confirmationName || '').trim();
+  if (confirmationName !== category.name) return res.status(400).json({ error: `اكتب اسم التصنيف (${category.name}) لتأكيد الحذف` });
+
+  const removeCategoryTree = db.transaction(() => {
+    const count = db.prepare('SELECT COUNT(*) c FROM products WHERE category_id = ?').get(categoryId).c;
+    db.prepare('DELETE FROM order_items WHERE product_id IN (SELECT id FROM products WHERE category_id = ?)').run(categoryId);
+    db.prepare('DELETE FROM products WHERE category_id = ?').run(categoryId);
+    db.prepare('DELETE FROM categories WHERE id = ?').run(categoryId);
+    return count;
+  });
+
+  const deletedProducts = removeCategoryTree();
+  res.json({ ok: true, deletedProducts });
 });
 
 // ---------- Users ----------
