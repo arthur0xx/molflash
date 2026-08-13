@@ -1,14 +1,17 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { CheckCircle2, ChevronDown, KeyRound, MessageCircle, Settings2, ShieldCheck, UserRound, WalletCards } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { CheckCircle2, ChevronDown, KeyRound, LogOut, MessageCircle, Settings2, ShieldCheck, UserRound, WalletCards } from "lucide-react";
 import type { DemoSnapshot } from "@/lib/types";
 import { formatMAD, statusLabels } from "@/lib/types";
 import { getBrowserDemoOrders, getBrowserDemoProfile, getBrowserSupportTickets, saveBrowserDemoProfile, saveBrowserSupportTicket, type BrowserDemoOrder, type BrowserDemoProfile, type BrowserSupportTicket } from "@/lib/demo-browser";
+import { signOutDemo } from "@/lib/demo-auth";
 
 const orderTone = (status: BrowserDemoOrder["status"]) => ({ new: "blue", processing: "amber", waiting: "violet", completed: "green", rejected: "red" }[status]);
 
 export function AccountConsole({ initial }: { initial: DemoSnapshot }) {
+  const router = useRouter();
   const customer = initial.customers[0];
   const initialProfile: BrowserDemoProfile = { fullName: customer.fullName, phone: customer.phone, email: customer.email };
   const baseOrders = initial.orders.filter((order) => order.customerId === customer.id).map((order) => ({ id: order.id, serviceId: order.serviceId, serviceTitle: initial.services.find((service) => service.id === order.serviceId)?.title || "خدمة", totalMad: order.totalMad, status: order.status, createdAt: order.updatedAt, answers: {} }));
@@ -30,6 +33,7 @@ export function AccountConsole({ initial }: { initial: DemoSnapshot }) {
   const orders = useMemo(() => [...browserOrders, ...baseOrders], [browserOrders, baseOrders]);
   function submitProfile(event: FormEvent<HTMLFormElement>) { event.preventDefault(); saveBrowserDemoProfile(profileDraft); setProfile(profileDraft); setProfileSaved(true); }
   function submitSupport(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const form = new FormData(event.currentTarget); saveBrowserSupportTicket({ id: `SUP-DEMO-${String(Date.now()).slice(-6)}`, subject: String(form.get("subject") || "الدعم"), message: String(form.get("message") || ""), status: "open", createdAt: new Date().toISOString() }); setTicketSaved(true); event.currentTarget.reset(); }
+  function signOut() { signOutDemo(); router.push("/login"); }
 
   return <main className="store-shell account-shell">
     <section className="account-hero"><div><p className="eyebrow">منطقة العميل</p><h1>مرحبًا، {profile.fullName}</h1><p>{profile.email}</p><span className="account-demo-note">ملف تجريبي محلي</span></div><div className="wallet-hero"><WalletCards size={22}/><span>رصيد المحفظة</span><strong>{formatMAD(customer.walletMad)}</strong></div></section>
@@ -37,6 +41,7 @@ export function AccountConsole({ initial }: { initial: DemoSnapshot }) {
     <section className="account-actions" aria-label="إجراءات الحساب">
       <button type="button" className={showSettings ? "active" : ""} onClick={() => { setShowSettings(!showSettings); setShowSupport(false); }}><Settings2 size={18}/><span>إعدادات الحساب</span><ChevronDown size={15}/></button>
       <button type="button" className={showSupport ? "active" : ""} onClick={() => { setShowSupport(!showSupport); setShowSettings(false); }}><MessageCircle size={18}/><span>الدعم الفني</span><ChevronDown size={15}/></button>
+      <button type="button" className="account-logout" onClick={signOut}><LogOut size={18}/><span>تسجيل الخروج</span></button>
     </section>
 
     {showSettings && <section className="account-panel"><div className="panel-heading"><div><p className="eyebrow">بيانات العميل</p><h2>إعدادات الحساب</h2></div><UserRound size={22}/></div><form className="settings-form" onSubmit={submitProfile}><label><span>الاسم الكامل</span><input value={profileDraft.fullName} onChange={(event) => setProfileDraft({ ...profileDraft, fullName: event.target.value })} required/></label><label><span>رقم الهاتف</span><input type="tel" value={profileDraft.phone} onChange={(event) => setProfileDraft({ ...profileDraft, phone: event.target.value })} required/></label><label><span>البريد الإلكتروني</span><input type="email" value={profileDraft.email} onChange={(event) => setProfileDraft({ ...profileDraft, email: event.target.value })} required/></label><div className="settings-password"><KeyRound size={18}/><div><b>كلمة المرور</b><p>ستصبح عملية تغيير كلمة المرور عبر البريد الإلكتروني متاحة عند تشغيل Firebase Authentication.</p></div><button type="button" className="outline-button" disabled>إرسال رابط التغيير</button></div><div className="form-actions"><button className="primary-button" type="submit">حفظ التغييرات التجريبية</button>{profileSaved && <span className="saved-inline"><CheckCircle2 size={16}/> حُفظت على هذا المتصفح</span>}</div></form></section>}
