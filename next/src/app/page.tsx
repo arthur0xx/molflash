@@ -4,6 +4,8 @@ import { BottomNav, Header } from "@/components/header";
 import { ServiceCard } from "@/components/service-card";
 import { getSnapshot } from "@/lib/repository";
 
+export const dynamic = "force-dynamic";
+
 export default async function Home() {
   const snapshot = await getSnapshot();
   const active = snapshot.services.filter((service) => service.isActive);

@@ -5,15 +5,19 @@ import { useRouter } from "next/navigation";
 import { BellRing, CheckCircle2, ChevronDown, ClipboardList, KeyRound, LogOut, MessageCircle, Settings2, ShieldCheck, UserRound, WalletCards } from "lucide-react";
 import type { DemoSnapshot } from "@/lib/types";
 import { formatMAD, statusLabels } from "@/lib/types";
+import { firebaseServices } from "@/lib/firebase/client";
 import { getBrowserDemoOrders, getBrowserDemoProfile, getBrowserSupportTickets, saveBrowserDemoProfile, saveBrowserSupportTicket, type BrowserDemoOrder, type BrowserDemoProfile, type BrowserSupportTicket } from "@/lib/demo-browser";
-import { signOutDemo } from "@/lib/demo-auth";
+import { getDemoSession, signOutDemo, type DemoSession } from "@/lib/demo-auth";
 
 const orderTone = (status: BrowserDemoOrder["status"]) => ({ new: "blue", processing: "amber", waiting: "violet", completed: "green", rejected: "red" }[status]);
 const fieldLabels: Record<string, string> = { email: "البريد الإلكتروني", imei: "IMEI", model: "موديل الجهاز", serial: "Serial Number", username: "اسم المستخدم", plan: "الباقة", duration: "مدة الكراء", game: "اللعبة", playerId: "Player ID" };
 
 export function AccountConsole({ initial }: { initial: DemoSnapshot }) {
   const router = useRouter();
-  const customer = initial.customers[0];
+  const firebase = firebaseServices();
+  const [session, setSession] = useState<DemoSession | null>(null);
+  useEffect(() => { const refresh = () => setSession(getDemoSession()); refresh(); window.addEventListener("chrigsm:demo-session", refresh); return () => window.removeEventListener("chrigsm:demo-session", refresh); }, []);
+  const customer = useMemo(() => initial.customers.find((item) => item.id === session?.uid || item.email === session?.email) || initial.customers[0], [initial.customers, session]);
   const initialProfile: BrowserDemoProfile = { fullName: customer.fullName, phone: customer.phone, email: customer.email };
   const baseOrders: BrowserDemoOrder[] = initial.orders.filter((order) => order.customerId === customer.id).map((order) => ({
     id: order.id, customerId: order.customerId, customerName: customer.fullName, customerPhone: customer.phone, customerEmail: customer.email,
@@ -31,20 +35,23 @@ export function AccountConsole({ initial }: { initial: DemoSnapshot }) {
   const [profileSaved, setProfileSaved] = useState(false);
   const [ticketSaved, setTicketSaved] = useState(false);
 
+  useEffect(() => { setProfile(initialProfile); setProfileDraft(initialProfile); }, [customer.id, initialProfile.email, initialProfile.fullName, initialProfile.phone]);
+
   useEffect(() => {
+    if (firebase) return;
     const refresh = () => { setBrowserOrders(getBrowserDemoOrders()); setTickets(getBrowserSupportTickets()); const stored = getBrowserDemoProfile(); if (stored) { setProfile(stored); setProfileDraft(stored); } };
     refresh(); window.addEventListener("chrigsm:demo-order", refresh); window.addEventListener("chrigsm:demo-profile", refresh); window.addEventListener("chrigsm:demo-support", refresh); window.addEventListener("storage", refresh);
     return () => { window.removeEventListener("chrigsm:demo-order", refresh); window.removeEventListener("chrigsm:demo-profile", refresh); window.removeEventListener("chrigsm:demo-support", refresh); window.removeEventListener("storage", refresh); };
-  }, []);
+  }, [firebase]);
 
-  const orders = useMemo(() => [...browserOrders, ...baseOrders], [browserOrders, baseOrders]);
+  const orders = useMemo(() => firebase ? baseOrders : [...browserOrders, ...baseOrders], [firebase, browserOrders, baseOrders]);
   const unreadNotifications = orders.filter((order) => order.status === "completed" && order.notification);
   function submitProfile(event: FormEvent<HTMLFormElement>) { event.preventDefault(); saveBrowserDemoProfile(profileDraft); setProfile(profileDraft); setProfileSaved(true); }
   function submitSupport(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const form = new FormData(event.currentTarget); saveBrowserSupportTicket({ id: `SUP-DEMO-${String(Date.now()).slice(-6)}`, subject: String(form.get("subject") || "الدعم"), message: String(form.get("message") || ""), status: "open", createdAt: new Date().toISOString() }); setTicketSaved(true); event.currentTarget.reset(); }
   function signOut() { signOutDemo(); router.push("/login"); }
 
   return <main className="store-shell account-shell">
-    <section className="account-hero"><div><p className="eyebrow">منطقة العميل</p><h1>مرحبًا، {profile.fullName}</h1><p>{profile.email}</p><span className="account-demo-note">ملف تجريبي محلي</span></div><div className="wallet-hero"><WalletCards size={22}/><span>رصيد المحفظة</span><strong>{formatMAD(customer.walletMad)}</strong></div></section>
+    <section className="account-hero"><div><p className="eyebrow">منطقة العميل</p><h1>مرحبًا، {profile.fullName}</h1><p>{profile.email}</p><span className="account-demo-note">{session ? "حساب Firebase متصل" : "جارٍ التحقق من الحساب"}</span></div><div className="wallet-hero"><WalletCards size={22}/><span>رصيد المحفظة</span><strong>{formatMAD(customer.walletMad)}</strong></div></section>
 
     {unreadNotifications.length > 0 && <section className="order-notification"><BellRing size={21}/><div><p>إشعار الطلب</p><b>{unreadNotifications[0].notification?.title}</b><span>{unreadNotifications[0].notification?.body}</span></div><span className="status-pill green">تم التسليم</span></section>}
 
@@ -54,11 +61,11 @@ export function AccountConsole({ initial }: { initial: DemoSnapshot }) {
       <button type="button" className="account-logout" onClick={signOut}><LogOut size={18}/><span>تسجيل الخروج</span></button>
     </section>
 
-    {showSettings && <section className="account-panel"><div className="panel-heading"><div><p className="eyebrow">بيانات العميل</p><h2>إعدادات الحساب</h2></div><UserRound size={22}/></div><form className="settings-form" onSubmit={submitProfile}><label><span>الاسم الكامل</span><input value={profileDraft.fullName} onChange={(event) => setProfileDraft({ ...profileDraft, fullName: event.target.value })} required/></label><label><span>رقم الهاتف</span><input type="tel" value={profileDraft.phone} onChange={(event) => setProfileDraft({ ...profileDraft, phone: event.target.value })} required/></label><label><span>البريد الإلكتروني</span><input type="email" value={profileDraft.email} onChange={(event) => setProfileDraft({ ...profileDraft, email: event.target.value })} required/></label><div className="settings-password"><KeyRound size={18}/><div><b>كلمة المرور</b><p>ستصبح عملية تغيير كلمة المرور عبر البريد الإلكتروني متاحة عند تشغيل Firebase Authentication.</p></div><button type="button" className="outline-button" disabled>إرسال رابط التغيير</button></div><div className="form-actions"><button className="primary-button" type="submit">حفظ التغييرات التجريبية</button>{profileSaved && <span className="saved-inline"><CheckCircle2 size={16}/> حُفظت على هذا المتصفح</span>}</div></form></section>}
+    {showSettings && <section className="account-panel"><div className="panel-heading"><div><p className="eyebrow">بيانات العميل</p><h2>إعدادات الحساب</h2></div><UserRound size={22}/></div><form className="settings-form" onSubmit={submitProfile}><label><span>الاسم الكامل</span><input value={profileDraft.fullName} onChange={(event) => setProfileDraft({ ...profileDraft, fullName: event.target.value })} required/></label><label><span>رقم الهاتف</span><input type="tel" value={profileDraft.phone} onChange={(event) => setProfileDraft({ ...profileDraft, phone: event.target.value })} required/></label><label><span>البريد الإلكتروني</span><input type="email" value={profileDraft.email} onChange={(event) => setProfileDraft({ ...profileDraft, email: event.target.value })} required/></label><div className="settings-password"><KeyRound size={18}/><div><b>كلمة المرور</b><p>تسجيل الدخول يعمل عبر Firebase Authentication. ستُضاف إعادة تعيين كلمة المرور عبر البريد في مرحلة الحسابات الكاملة.</p></div><button type="button" className="outline-button" disabled>إرسال رابط التغيير</button></div><div className="form-actions"><button className="primary-button" type="submit">حفظ التغييرات</button>{profileSaved && <span className="saved-inline"><CheckCircle2 size={16}/> حُفظت محليًا</span>}</div></form></section>}
 
     {showSupport && <section className="account-panel"><div className="panel-heading"><div><p className="eyebrow">مساعدة الطلبات والحساب</p><h2>الدعم الفني</h2></div><MessageCircle size={22}/></div><p className="panel-intro">أنشئ رسالة دعم مرتبطة بحسابك. ستظهر لفريق CMC عند ربط قاعدة البيانات، وسيُضاف WhatsApp Business دون إرسال رسائل حقيقية الآن.</p><form className="support-form" onSubmit={submitSupport}><label><span>موضوع الرسالة</span><input name="subject" placeholder="مثال: أحتاج مساعدة في طلبي" required/></label><label><span>تفاصيل المشكلة</span><textarea name="message" placeholder="اكتب رقم الطلب أو اشرح ما تحتاجه..." required/></label><button className="primary-button" type="submit">إرسال طلب الدعم التجريبي</button>{ticketSaved && <span className="saved-inline"><CheckCircle2 size={16}/> أضيف طلب الدعم إلى سجل هذا المتصفح</span>}</form>{tickets.length > 0 && <div className="ticket-list"><h3>رسائل الدعم التجريبية</h3>{tickets.map((ticket) => <article key={ticket.id}><div><b>{ticket.subject}</b><p>{ticket.message}</p></div><span>{ticket.status === "open" ? "مفتوح" : "تم الرد"}</span></article>)}</div>}</section>}
 
-    <section className="section-block"><div className="section-title"><div><p className="eyebrow">متابعة مباشرة</p><h2>طلباتي</h2></div><span className="muted-text">{orders.length} طلبات تجريبية</span></div><div className="order-list">{orders.map((order) => <OrderRow key={order.id} order={order} />)}</div></section>
+    <section className="section-block"><div className="section-title"><div><p className="eyebrow">متابعة مباشرة</p><h2>طلباتي</h2></div><span className="muted-text">{orders.length} طلبات</span></div><div className="order-list">{orders.map((order) => <OrderRow key={order.id} order={order} />)}</div></section>
     <section className="security-note"><ShieldCheck size={21}/><div><h3>ما الذي سيصبح حقيقيًا بعد الربط؟</h3><p>سيُحفظ الملف، والطلبات، والتسليم، والإشعارات في Firebase. ستصل رسالة WhatsApp فقط بعد إعداد WhatsApp Business رسميًا، ولن تكون بيانات العملاء متاحة لغير المدير المصرح له.</p></div></section>
   </main>;
 }
