@@ -1,5 +1,6 @@
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useApp } from '../context.jsx';
+import { publicAssetUrl } from '../api.js';
 
 export default function Navbar() {
   const { user, cartCount, logout, notifications, loadNotifications } = useApp();
@@ -11,7 +12,7 @@ export default function Navbar() {
     <header className="navbar">
       <div className="container nav-inner">
         <Link to="/" className="brand">
-          <span className="brand-logo"><img src="/assets/chrigsm-mark.png" alt="" /></span>
+          <span className="brand-logo"><img src={publicAssetUrl('assets/chrigsm-mark.png')} alt="" /></span>
           <span className="brand-name"><b>chrigsm</b></span>
         </Link>
         <nav className="nav-links">

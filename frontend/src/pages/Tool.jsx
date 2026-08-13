@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { api } from '../api.js';
+import { api, publicAssetUrl } from '../api.js';
 import { useApp } from '../context.jsx';
 import ProductCard from '../components/ProductCard.jsx';
 
@@ -36,8 +36,8 @@ export default function Tool() {
     <div className="container tool-page">
       <div className="tool-detail">
         <div className="tool-hero-image" style={{ background: tool.gradient }}>
-          <img src={tool.asset_path || '/assets/chrigsm-default-service-hero.png'} alt={`هوية ${tool.tool_name}`} />
-          <img className="tool-brand-stamp tool-brand-stamp-detail" src="/assets/chrigsm-mark.png" alt="chrigsm" />
+          <img src={publicAssetUrl(tool.asset_path)} alt={`هوية ${tool.tool_name}`} />
+          <img className="tool-brand-stamp tool-brand-stamp-detail" src={publicAssetUrl('assets/chrigsm-mark.png')} alt="chrigsm" />
           <span className="tool-image-badge">{tool.asset_status === 'ready' ? 'صورة الأداة' : 'صورة افتراضية'}</span>
         </div>
         <div className="tool-info">

@@ -10,3 +10,6 @@ dist/
 .env
 .env.*
 !.env.example
+
+# Generated static catalog used only during the GitHub Pages build
+frontend/public/static-api/

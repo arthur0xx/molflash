@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { publicAssetUrl } from '../api.js';
 
 export default function ProductCard({ product: tool }) {
   const priceText = tool.max_price > tool.price
@@ -8,8 +9,8 @@ export default function ProductCard({ product: tool }) {
   return (
     <Link to={`/tool/${tool.tool_key}`} className="product-card tool-card">
       <div className="product-emoji tool-visual" style={{ background: tool.gradient }}>
-        <img src={tool.asset_path || '/assets/chrigsm-default-service-hero.png'} alt="" loading="lazy" />
-        <img className="tool-brand-stamp" src="/assets/chrigsm-mark.png" alt="chrigsm" />
+        <img src={publicAssetUrl(tool.asset_path)} alt="" loading="lazy" />
+        <img className="tool-brand-stamp" src={publicAssetUrl('assets/chrigsm-mark.png')} alt="chrigsm" />
         {tool.is_featured ? <span className="tag">مختارة</span> : null}
         <span className="tool-type">{tool.service_type || 'SERVICE'}</span>
       </div>

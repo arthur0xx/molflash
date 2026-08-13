@@ -6,6 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "generate:catalog": "node scripts/generate-static-catalog.mjs",
+    "build:preview": "npm run generate:catalog && VITE_STATIC_CATALOG=true vite build",
+    "build:pages": "npm run generate:catalog && VITE_STATIC_CATALOG=true vite build --base=/molflash/",
     "preview": "vite preview"
   },
   "dependencies": {
