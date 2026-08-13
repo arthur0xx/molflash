@@ -9,9 +9,10 @@ const DEMO_PHONES = ['0600000000', '0611111111', '0622222222'];
 const DEMO_VOUCHERS = ['TARBIB-20', 'TARBIB-50', 'MARHABA-100'];
 
 const paletteByType = {
-  SERVER: { emoji: '🔑', gradient: 'linear-gradient(135deg,#0f766e,#0891b2)', label: 'تفعيل وأدوات' },
-  IMEI: { emoji: '📱', gradient: 'linear-gradient(135deg,#2563eb,#7c3aed)', label: 'خدمات أجهزة' },
-  REMOTE: { emoji: '🧰', gradient: 'linear-gradient(135deg,#b45309,#ea580c)', label: 'خدمات عن بُعد' },
+  ACTIVATION: { emoji: '🔐', gradient: 'linear-gradient(135deg,#eaf3ff,#d8e8ff)', label: 'تفعيل الأدوات' },
+  SERVER: { emoji: '🛡️', gradient: 'linear-gradient(135deg,#eef5ff,#dceaff)', label: 'خدمات السيرفر' },
+  RENTAL: { emoji: '⏱️', gradient: 'linear-gradient(135deg,#f3f7ff,#e5edff)', label: 'كراء الأدوات' },
+  MISC: { emoji: '✦', gradient: 'linear-gradient(135deg,#eff6ff,#e3efff)', label: 'خدمات رقمية متنوعة' },
 };
 
 function compactText(value) {
@@ -94,12 +95,12 @@ function removeKnownDemoData() {
 
 function setInitialSettings() {
   const set = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?,?)');
-  set.run('store_name', 'chrigsm');
+  set.run('store_name', 'ChriGsm');
   set.run('currency', 'USD');
   set.run('whatsapp_number', '');
   set.run('whatsapp_api', '');
   set.run('whatsapp_token', '');
-  db.prepare("UPDATE settings SET value = 'chrigsm' WHERE key = 'store_name' AND value = 'MolFlash'").run();
+  db.prepare("UPDATE settings SET value = 'ChriGsm' WHERE key = 'store_name' AND value IN ('MolFlash', 'chrigsm')").run();
   set.run('catalog_mode', 'static_import');
   set.run('catalog_imported_at', new Date().toISOString());
 }
@@ -155,7 +156,7 @@ export default function seed() {
         const duration = compactText(service.TIME) || 'حسب تفاصيل الخدمة';
         const name = compactText(service.SERVICENAME);
         const { toolName, toolKey, packageLabel } = toolDescriptor(name);
-        const description = `${toolName} — ${packageLabel}. خدمة ${style.label} عبر MolFlash، بزمن تنفيذ متوقع: ${duration}. ستظهر الحقول المطلوبة قبل تأكيد الطلب.`;
+        const description = `${toolName} — ${packageLabel}. خدمة ضمن ${style.label}. ستظهر الحقول المطلوبة قبل تأكيد الطلب.`;
         const isFeatured = serviceIndex === 0 && featuredCount < 12 ? 1 : 0;
         if (isFeatured) featuredCount += 1;
 
@@ -176,7 +177,7 @@ export default function seed() {
           toolKey,
           toolName,
           packageLabel,
-          'default',
+          'none',
           '',
         );
       }

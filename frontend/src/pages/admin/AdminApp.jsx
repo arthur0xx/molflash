@@ -136,7 +136,7 @@ function Tools({ go }) {
       setForm({
         tool_name: data.tool.tool_name || '',
         category_id: String(data.tool.category_id || ''),
-        asset_status: data.tool.asset_status === 'ready' ? 'ready' : 'default',
+        asset_status: data.tool.asset_status === 'ready' ? 'ready' : 'none',
         asset_path: data.tool.asset_path?.startsWith('/assets/') ? data.tool.asset_path : '',
         is_featured: !!data.tool.is_featured,
         is_active: !!data.tool.is_active,
@@ -200,9 +200,9 @@ function Tools({ go }) {
           <p className="muted small">{visible.length} أداة معروضة</p>
           {visible.map((tool) => (
             <button key={tool.tool_key} className={`tool-admin-card ${selected?.tool?.tool_key === tool.tool_key ? 'selected' : ''}`} onClick={() => openTool(tool.tool_key)}>
-              <img src={tool.asset_path} alt="" />
+              {tool.asset_status === 'ready' && tool.asset_path ? <img src={tool.asset_path} alt="" /> : <span className="tool-admin-icon" aria-hidden="true">◈</span>}
               <span className="tool-admin-copy"><b>{tool.tool_name}</b><small>{tool.category_name} · {tool.package_count} باقات · من {tool.price} USD</small></span>
-              <span className={`asset-status ${tool.asset_status === 'ready' ? 'ready' : 'default'}`}>{tool.asset_status === 'ready' ? 'صورة جاهزة' : 'افتراضية'}</span>
+              <span className={`asset-status ${tool.asset_status === 'ready' ? 'ready' : 'default'}`}>{tool.asset_status === 'ready' ? 'صورة جاهزة' : 'بدون صورة'}</span>
             </button>
           ))}
           {!visible.length && <div className="empty"><p>لا توجد أدوات مطابقة.</p></div>}
@@ -211,7 +211,7 @@ function Tools({ go }) {
           {!selected || !form ? <div className="empty"><p>اختر أداة من القائمة لإدارة صورتها وباقاتها.</p></div> : (
             <>
               <div className="tool-admin-preview">
-                <img src={form.asset_status === 'ready' && form.asset_path ? form.asset_path : '/assets/chrigsm-default-service-hero.png'} alt="معاينة الأداة" />
+                {form.asset_status === 'ready' && form.asset_path ? <img src={form.asset_path} alt="معاينة الأداة" /> : <div className="admin-empty-preview" aria-label="لا توجد صورة للمنتج">◈</div>}
                 <div><span className="asset-status ready">{selected.tool.package_count} باقات</span><h2>{selected.tool.tool_name}</h2><p className="muted">تغييرات هذه الشاشة تُطبق على الأداة فقط، لا على أسعار الباقات أو حقولها.</p></div>
               </div>
               <form className="admin-form tool-edit-form" onSubmit={save}>
@@ -220,8 +220,8 @@ function Tools({ go }) {
                 <label className="field-label">التصنيف</label>
                 <select className="input" value={form.category_id} onChange={(e) => setForm({ ...form, category_id: e.target.value })}>{cats.map((c) => <option key={c.id} value={c.id}>{c.emoji} {c.name}</option>)}</select>
                 <label className="field-label">مصدر الصورة</label>
-                <select className="input" value={form.asset_status} onChange={(e) => setForm({ ...form, asset_status: e.target.value })}><option value="default">الصورة الافتراضية لـ chrigsm</option><option value="ready">صورة أداة محفوظة</option></select>
-                {form.asset_status === 'ready' && <><label className="field-label">مسار الصورة داخل الموقع</label><input className="input" dir="ltr" value={form.asset_path} onChange={(e) => setForm({ ...form, asset_path: e.target.value })} placeholder="/assets/tools/example.png" required /><p className="muted small">ارفع أو انسخ الملف أولاً إلى `frontend/public/assets/tools/` ثم اكتب مساره هنا.</p></>}
+                <select className="input" value={form.asset_status} onChange={(e) => setForm({ ...form, asset_status: e.target.value })}><option value="none">بدون صورة</option><option value="ready">إضافة صورة اختيارية</option></select>
+                {form.asset_status === 'ready' && <><label className="field-label">مسار الصورة أو رابطها</label><input className="input" dir="ltr" value={form.asset_path} onChange={(e) => setForm({ ...form, asset_path: e.target.value })} placeholder="/assets/products/example.png أو رابط صورة" required /><p className="muted small">إضافة الصورة اختيارية؛ تبقى بطاقات المتجر أيقونية عندما لا توجد صورة.</p></>}
                 <label className="check"><input type="checkbox" checked={form.is_featured} onChange={(e) => setForm({ ...form, is_featured: e.target.checked })} /> تظهر ضمن الأدوات المختارة</label>
                 <label className="check"><input type="checkbox" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} /> الأداة متاحة للزبائن</label>
                 <button className="btn btn-primary" disabled={saving}>{saving ? 'جارٍ الحفظ…' : 'حفظ بيانات الأداة'}</button>

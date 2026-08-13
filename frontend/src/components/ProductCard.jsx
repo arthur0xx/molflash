@@ -1,28 +1,47 @@
 import { Link } from 'react-router-dom';
-import { publicAssetUrl } from '../api.js';
 
-export default function ProductCard({ product: tool }) {
-  const priceText = tool.max_price > tool.price
-    ? `من ${tool.price} إلى ${tool.max_price}`
-    : `${tool.price}`;
+const typeIcon = {
+  ACTIVATION: '⌁',
+  SERVER: '◈',
+  RENTAL: '◷',
+  MISC: '✦',
+};
+
+export function productPrice(value) {
+  const amount = Number(value || 0);
+  return amount > 0 ? `$${amount.toFixed(2)}` : 'سعر تجريبي';
+}
+
+export default function ProductCard({ product: tool, variant = 'card' }) {
+  const icon = typeIcon[tool.service_type] || tool.emoji || '◌';
+  const destination = `/tool/${tool.tool_key}`;
+
+  if (variant === 'list') {
+    return (
+      <Link to={destination} className="service-list-card">
+        <span className="service-icon" aria-hidden="true">{icon}</span>
+        <span className="service-list-copy">
+          <b>{tool.tool_name}</b>
+          <small>{tool.package_count || 1} باقة · {tool.category_name}</small>
+        </span>
+        <span className="service-list-price">{productPrice(tool.price)}</span>
+        <span className="service-arrow" aria-hidden="true">‹</span>
+      </Link>
+    );
+  }
 
   return (
-    <Link to={`/tool/${tool.tool_key}`} className="product-card tool-card">
-      <div className="product-emoji tool-visual" style={{ background: tool.gradient }}>
-        <img src={publicAssetUrl(tool.asset_path)} alt="" loading="lazy" />
-        <img className="tool-brand-stamp" src={publicAssetUrl('assets/chrigsm-mark.png')} alt="chrigsm" />
-        {tool.is_featured ? <span className="tag">مختارة</span> : null}
-        <span className="tool-type">{tool.service_type || 'SERVICE'}</span>
-      </div>
-      <div className="product-body">
-        <h3>{tool.tool_name}</h3>
-        <span className="cat-name">{tool.category_name}</span>
-        <p className="tool-packages">{tool.package_count} باقات متاحة</p>
-        <div className="price-row">
-          <b>{priceText} <small>USD</small></b>
-        </div>
-        <span className="btn btn-primary btn-block btn-sm">عرض الباقات</span>
-      </div>
+    <Link to={destination} className="app-product-card">
+      <span className="service-icon app-product-icon" aria-hidden="true">{icon}</span>
+      <span className="app-product-copy">
+        <b>{tool.tool_name}</b>
+        <small>{tool.package_count || 1} باقة متاحة</small>
+        <em className="availability"><i /> متوفر</em>
+      </span>
+      <span className="app-product-footer">
+        <strong>{productPrice(tool.price)}</strong>
+        <span aria-hidden="true">←</span>
+      </span>
     </Link>
   );
 }

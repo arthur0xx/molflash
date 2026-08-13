@@ -1,7 +1,6 @@
 import { Routes, Route, useLocation } from 'react-router-dom';
 import Navbar from './components/Navbar.jsx';
-import Footer from './components/Footer.jsx';
-import WhatsAppFab from './components/WhatsAppFab.jsx';
+import BottomNav from './components/BottomNav.jsx';
 import Home from './pages/Home.jsx';
 import Shop from './pages/Shop.jsx';
 import Product from './pages/Product.jsx';
@@ -17,7 +16,7 @@ export default function App() {
   const isAdmin = location.pathname.startsWith('/admin');
 
   return (
-    <div className="app">
+    <div className={isAdmin ? 'admin-app-root' : 'store-app-root'}>
       {!isAdmin && <Navbar />}
       <Routes>
         <Route path="/" element={<Home />} />
@@ -30,8 +29,7 @@ export default function App() {
         <Route path="/profile" element={<Profile />} />
         <Route path="/admin/*" element={<AdminApp />} />
       </Routes>
-      {!isAdmin && <Footer />}
-      {!isAdmin && <WhatsAppFab />}
+      {!isAdmin && <BottomNav />}
     </div>
   );
 }

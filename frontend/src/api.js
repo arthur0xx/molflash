@@ -7,7 +7,8 @@ export const setToken = (t) => localStorage.setItem(TOKEN_KEY, t);
 export const clearToken = () => localStorage.removeItem(TOKEN_KEY);
 
 export const publicAssetUrl = (assetPath) => {
-  const value = String(assetPath || 'assets/chrigsm-default-service-hero.png');
+  const value = String(assetPath || '');
+  if (!value) return '';
   if (/^https?:\/\//i.test(value)) return value;
   return `${import.meta.env.BASE_URL}${value.replace(/^\/+/, '')}`;
 };

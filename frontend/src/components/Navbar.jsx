@@ -1,40 +1,42 @@
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useApp } from '../context.jsx';
-import { publicAssetUrl } from '../api.js';
+
+const logoPath = `${import.meta.env.BASE_URL}assets/chrigsm-logo.jpg`;
 
 export default function Navbar() {
-  const { user, cartCount, logout, notifications, loadNotifications } = useApp();
+  const { user, cartCount, notifications, loadNotifications } = useApp();
   const navigate = useNavigate();
-
-  const unread = notifications.filter(n => !n.is_read).length;
+  const unread = notifications.filter((item) => !item.is_read).length;
 
   return (
-    <header className="navbar">
-      <div className="container nav-inner">
-        <Link to="/" className="brand">
-          <span className="brand-logo"><img src={publicAssetUrl('assets/chrigsm-mark.png')} alt="" /></span>
-          <span className="brand-name"><b>chrigsm</b></span>
+    <header className="app-header">
+      <div className="app-header-inner">
+        <Link to="/" className="app-brand" aria-label="الصفحة الرئيسية">
+          <img src={logoPath} alt="ChriGsm" />
+          <span>ChriGsm</span>
         </Link>
-        <nav className="nav-links">
+
+        <nav className="desktop-nav" aria-label="التنقل الرئيسي">
           <NavLink to="/" end>الرئيسية</NavLink>
-          <NavLink to="/shop">الأدوات والخدمات</NavLink>
+          <NavLink to="/shop">الكتالوغ</NavLink>
+          <NavLink to="/cart">السلة{cartCount ? ` (${cartCount})` : ''}</NavLink>
         </nav>
-        <div className="nav-actions">
-          <Link to="/cart" className="nav-icon-btn" title="السلة">
-            🛒 {cartCount > 0 && <span className="badge">{cartCount}</span>}
+
+        <div className="app-header-actions">
+          <button className="circle-action" type="button" aria-label="الإشعارات" onClick={() => {
+            if (!user) return navigate('/login');
+            loadNotifications();
+            navigate('/profile?tab=notifications');
+          }}>
+            ♧{unread > 0 ? <span className="notification-dot" /> : null}
+          </button>
+          <Link className="circle-action cart-action" to="/cart" aria-label="سلة المشتريات">
+            ▢{cartCount > 0 ? <span className="cart-count">{cartCount}</span> : null}
           </Link>
           {user ? (
-            <>
-              <button className="nav-icon-btn" title="الإشعارات" onClick={() => { loadNotifications(); navigate('/profile?tab=notifications'); }}>
-                🔔 {unread > 0 && <span className="badge">{unread}</span>}
-              </button>
-              <button className="nav-icon-btn" title="حسابي" onClick={() => navigate('/profile')}>👤</button>
-              <span className="balance-chip" title="رصيد المحفظة">💳 {user.balance} USD</span>
-              {user.role === 'admin' && <Link to="/admin" className="nav-icon-btn" title="لوحة التحكم">⚙️</Link>}
-              <button className="nav-icon-btn" title="تسجيل الخروج" onClick={() => { logout(); navigate('/'); }}>🚪</button>
-            </>
+            <button type="button" className="login-action" onClick={() => navigate('/profile')}>حسابي</button>
           ) : (
-            <Link to="/login" className="btn btn-primary btn-sm">دخول / تسجيل</Link>
+            <Link to="/login" className="login-action">تسجيل الدخول</Link>
           )}
         </div>
       </div>

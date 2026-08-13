@@ -3,14 +3,12 @@ import db from '../db.js';
 import { parseFields } from '../util.js';
 
 const router = Router();
-const DEFAULT_TOOL_ASSET = '/assets/chrigsm-default-service-hero.png';
-
 const productRow = (p) => ({
   id: p.id, category_id: p.category_id, name: p.name, description: p.description,
   price: p.price, old_price: p.old_price, emoji: p.emoji, gradient: p.gradient,
   is_featured: p.is_featured, is_active: p.is_active, sold_count: p.sold_count,
   source_service_id: p.source_service_id, service_type: p.service_type, delivery_time: p.delivery_time,
-  tool_key: p.tool_key, tool_name: p.tool_name, package_label: p.package_label, asset_status: p.asset_status, asset_path: p.asset_path || DEFAULT_TOOL_ASSET,
+  tool_key: p.tool_key, tool_name: p.tool_name, package_label: p.package_label, asset_status: p.asset_status || 'none', asset_path: p.asset_path || '',
   fields: parseFields(p),
   category_name: p.category_name,
 });
@@ -34,8 +32,8 @@ function toolRow(row) {
     package_count: row.package_count,
     price: row.price,
     max_price: row.max_price,
-    asset_status: row.asset_status || 'default',
-    asset_path: row.asset_path || DEFAULT_TOOL_ASSET,
+    asset_status: row.asset_status || 'none',
+    asset_path: row.asset_path || '',
   };
 }
 

@@ -6,13 +6,13 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const frontendDir = path.resolve(__dirname, '..');
 const sourcePath = path.resolve(frontendDir, '../backend/src/data/gsm-services.json');
 const outputDir = path.join(frontendDir, 'public', 'static-api');
-const assetsDir = path.join(frontendDir, 'public', 'assets', 'tools');
 const sourceCatalog = JSON.parse(fs.readFileSync(sourcePath, 'utf8'));
 
 const paletteByType = {
-  SERVER: { emoji: '🔑', gradient: 'linear-gradient(135deg,#0f766e,#0891b2)', label: 'تفعيل وأدوات' },
-  IMEI: { emoji: '📱', gradient: 'linear-gradient(135deg,#2563eb,#7c3aed)', label: 'خدمات أجهزة' },
-  REMOTE: { emoji: '🧰', gradient: 'linear-gradient(135deg,#b45309,#ea580c)', label: 'خدمات عن بُعد' },
+  ACTIVATION: { emoji: '🔐', gradient: 'linear-gradient(135deg,#eaf3ff,#d8e8ff)', label: 'تفعيل الأدوات' },
+  SERVER: { emoji: '🛡️', gradient: 'linear-gradient(135deg,#eef5ff,#dceaff)', label: 'خدمات السيرفر' },
+  RENTAL: { emoji: '⏱️', gradient: 'linear-gradient(135deg,#f3f7ff,#e5edff)', label: 'كراء الأدوات' },
+  MISC: { emoji: '✦', gradient: 'linear-gradient(135deg,#eff6ff,#e3efff)', label: 'خدمات رقمية متنوعة' },
 };
 
 function compactText(value) {
@@ -60,11 +60,9 @@ function toolDescriptor(serviceName) {
   return { toolName: safeToolName, toolKey, packageLabel };
 }
 
-function assetPathFor(toolKey) {
-  for (const extension of ['png', 'jpg', 'jpeg', 'webp']) {
-    if (fs.existsSync(path.join(assetsDir, `${toolKey}.${extension}`))) return `assets/tools/${toolKey}.${extension}`;
-  }
-  return 'assets/chrigsm-default-service-hero.png';
+function assetPathFor() {
+  // The storefront deliberately uses icon-first cards. Owners can add a product image later.
+  return '';
 }
 
 const categories = [];
@@ -116,8 +114,8 @@ for (const group of Object.values(sourceCatalog)) {
       tool_key: toolKey,
       tool_name: toolName,
       package_label: packageLabel,
-      asset_status: assetPathFor(toolKey).includes('/tools/') ? 'ready' : 'default',
-      asset_path: assetPathFor(toolKey),
+      asset_status: 'none',
+      asset_path: assetPathFor(),
     });
   }
   categoryId += 1;
@@ -147,8 +145,8 @@ const tools = [...byTool.entries()].map(([toolKey, packages]) => {
     package_count: packages.length,
     price: Math.min(...prices),
     max_price: Math.max(...prices),
-    asset_status: first.asset_status,
-    asset_path: first.asset_path,
+    asset_status: 'none',
+    asset_path: '',
   };
 }).sort((a, b) => b.is_featured - a.is_featured || a.tool_name.localeCompare(b.tool_name));
 
@@ -158,7 +156,7 @@ const catalog = {
   products,
   tools,
   featured: tools.filter((tool) => tool.is_featured).slice(0, 12),
-  settings: { store_name: 'chrigsm', currency: 'USD', catalog_mode: 'static_preview' },
+  settings: { store_name: 'ChriGsm', currency: 'USD', catalog_mode: 'demo_preview' },
 };
 
 fs.mkdirSync(outputDir, { recursive: true });
