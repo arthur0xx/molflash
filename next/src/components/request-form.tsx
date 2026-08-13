@@ -15,8 +15,9 @@ export function RequestForm({ service }: { service: Service }) {
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const formElement = event.currentTarget;
     setSubmitting(true); setError("");
-    const form = new FormData(event.currentTarget);
+    const form = new FormData(formElement);
     const answers = Object.fromEntries(form.entries().map(([key, value]) => [key, String(value)]));
     const services = firebaseServices();
 
@@ -27,7 +28,7 @@ export function RequestForm({ service }: { service: Service }) {
         const response = await fetch("/api/orders", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${await user.getIdToken()}` }, body: JSON.stringify({ serviceId: service.id, formData: answers }) });
         const payload = await response.json() as { id?: string; error?: string };
         if (!response.ok || !payload.id) throw new Error(payload.error || "تعذر إنشاء الطلب.");
-        setOrderId(payload.id); setSubmitted(true); event.currentTarget.reset();
+        setOrderId(payload.id); setSubmitted(true); formElement.reset();
       } catch (reason) {
         setError(reason instanceof Error ? reason.message : "تعذر إنشاء الطلب.");
       } finally { setSubmitting(false); }
