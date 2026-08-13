@@ -5,3 +5,8 @@ dist/
 *.db-shm
 .DS_Store
 *.log
+
+# Local environment secrets
+.env
+.env.*
+!.env.example

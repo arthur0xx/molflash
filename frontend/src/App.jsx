@@ -5,6 +5,7 @@ import WhatsAppFab from './components/WhatsAppFab.jsx';
 import Home from './pages/Home.jsx';
 import Shop from './pages/Shop.jsx';
 import Product from './pages/Product.jsx';
+import Tool from './pages/Tool.jsx';
 import Login from './pages/Login.jsx';
 import Cart from './pages/Cart.jsx';
 import Checkout from './pages/Checkout.jsx';
@@ -22,6 +23,7 @@ export default function App() {
         <Route path="/" element={<Home />} />
         <Route path="/shop" element={<Shop />} />
         <Route path="/product/:id" element={<Product />} />
+        <Route path="/tool/:toolKey" element={<Tool />} />
         <Route path="/login" element={<Login />} />
         <Route path="/cart" element={<Cart />} />
         <Route path="/checkout" element={<Checkout />} />

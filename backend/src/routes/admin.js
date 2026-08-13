@@ -6,19 +6,133 @@ import { addNotification, waLinkTo, orderStatusMessage } from '../notify.js';
 import { parseFields, normalizeFields } from '../util.js';
 
 const router = Router();
+const DEFAULT_TOOL_ASSET = '/assets/chrigsm-default-service-hero.png';
+const toolKeySql = "COALESCE(NULLIF(p.tool_key, ''), 'service-' || p.id)";
+const toolKeyWriteSql = "COALESCE(NULLIF(tool_key, ''), 'service-' || id)";
+
+function toolSummary(row) {
+  return {
+    ...row,
+    asset_status: row.asset_status || 'default',
+    asset_path: row.asset_path || DEFAULT_TOOL_ASSET,
+  };
+}
+
+function slugifyToolKey(value) {
+  return String(value || '').toLowerCase().trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '') || `manual-${Date.now()}`;
+}
 
 router.get('/stats', adminAuth, (req, res) => {
   const users = db.prepare("SELECT COUNT(*) c FROM users WHERE role = 'customer'").get().c;
   const products = db.prepare('SELECT COUNT(*) c FROM products').get().c;
+  const tools = db.prepare("SELECT COUNT(DISTINCT CASE WHEN tool_key != '' THEN tool_key ELSE 'service-' || id END) c FROM products").get().c;
+  const readyAssets = db.prepare("SELECT COUNT(DISTINCT tool_key) c FROM products WHERE tool_key != '' AND asset_status = 'ready'").get().c;
+  const pendingAssets = db.prepare("SELECT COUNT(DISTINCT tool_key) c FROM products WHERE tool_key != '' AND asset_status != 'ready'").get().c;
   const orders = db.prepare('SELECT COUNT(*) c FROM orders').get().c;
   const revenue = db.prepare("SELECT COALESCE(SUM(total),0) s FROM orders WHERE status != 'rejected'").get().s;
   const pending = db.prepare("SELECT COUNT(*) c FROM orders WHERE status = 'pending'").get().c;
   const today = db.prepare("SELECT COUNT(*) c FROM orders WHERE date(created_at) = date('now')").get().c;
   const pendingWallet = db.prepare("SELECT COUNT(*) c FROM wallet_transactions WHERE type='credit' AND status='pending'").get().c;
-  res.json({ users, products, orders, revenue, pending, today, pendingWallet });
+  res.json({ users, products, tools, readyAssets, pendingAssets, orders, revenue, pending, today, pendingWallet });
 });
 
-// ---------- Products ----------
+// ---------- Tools (one visual identity, multiple packages) ----------
+router.get('/tools', adminAuth, (req, res) => {
+  const rows = db.prepare(`SELECT
+      ${toolKeySql} AS tool_key,
+      MIN(COALESCE(NULLIF(p.tool_name, ''), p.name)) AS tool_name,
+      MIN(p.category_id) AS category_id,
+      MIN(c.name) AS category_name,
+      COUNT(*) AS package_count,
+      MIN(p.price) AS price,
+      MAX(p.price) AS max_price,
+      MAX(p.is_featured) AS is_featured,
+      MIN(p.is_active) AS is_active,
+      MIN(p.asset_status) AS asset_status,
+      MIN(NULLIF(p.asset_path, '')) AS asset_path,
+      MAX(p.id) AS last_package_id
+    FROM products p JOIN categories c ON c.id = p.category_id
+    GROUP BY ${toolKeySql}
+    ORDER BY CASE WHEN MIN(p.asset_status) = 'ready' THEN 1 ELSE 0 END, tool_name COLLATE NOCASE`).all();
+  res.json(rows.map(toolSummary));
+});
+
+router.get('/tools/assets/queue', adminAuth, (req, res) => {
+  const rows = db.prepare(`SELECT
+      ${toolKeySql} AS tool_key,
+      MIN(COALESCE(NULLIF(p.tool_name, ''), p.name)) AS tool_name,
+      MIN(c.name) AS category_name,
+      COUNT(*) AS package_count,
+      MIN(p.price) AS min_price,
+      MAX(p.price) AS max_price
+    FROM products p JOIN categories c ON c.id = p.category_id
+    WHERE COALESCE(p.asset_status, 'default') != 'ready'
+    GROUP BY ${toolKeySql}
+    ORDER BY tool_name COLLATE NOCASE`).all();
+  res.json({
+    generated_at: new Date().toISOString(),
+    total: rows.length,
+    instructions: 'ضع صورة واحدة موثوقة لكل أداة في frontend/public/assets/tools/ ثم حدّث مسارها من لوحة الإدارة.',
+    tools: rows.map((row) => ({
+      ...row,
+      asset_status: 'default',
+      suggested_filename: `${row.tool_key}.png`,
+      suggested_asset_path: `/assets/tools/${row.tool_key}.png`,
+      action: 'manual_asset_review',
+    })),
+  });
+});
+
+router.get('/tools/:toolKey', adminAuth, (req, res) => {
+  const toolKey = String(req.params.toolKey || '');
+  const packages = db.prepare(`SELECT p.*, c.name AS category_name FROM products p
+    JOIN categories c ON c.id = p.category_id WHERE ${toolKeySql} = ? ORDER BY p.price ASC, p.id DESC`).all(toolKey);
+  if (!packages.length) return res.status(404).json({ error: 'الأداة غير موجودة' });
+  const first = packages[0];
+  res.json({
+    tool: toolSummary({
+      tool_key: toolKey,
+      tool_name: first.tool_name || first.name,
+      category_id: first.category_id,
+      category_name: first.category_name,
+      package_count: packages.length,
+      price: Math.min(...packages.map((item) => Number(item.price) || 0)),
+      max_price: Math.max(...packages.map((item) => Number(item.price) || 0)),
+      is_featured: packages.some((item) => item.is_featured) ? 1 : 0,
+      is_active: packages.every((item) => item.is_active) ? 1 : 0,
+      asset_status: first.asset_status,
+      asset_path: first.asset_path,
+    }),
+    packages: packages.map((item) => ({ ...item, fields: parseFields(item) })),
+  });
+});
+
+router.put('/tools/:toolKey', adminAuth, (req, res) => {
+  const toolKey = String(req.params.toolKey || '');
+  const current = db.prepare(`SELECT p.*, c.name AS category_name FROM products p
+    JOIN categories c ON c.id = p.category_id WHERE ${toolKeySql} = ? LIMIT 1`).get(toolKey);
+  if (!current) return res.status(404).json({ error: 'الأداة غير موجودة' });
+
+  const body = req.body || {};
+  const toolName = String(body.tool_name ?? current.tool_name ?? current.name).trim() || current.name;
+  const categoryId = body.category_id !== undefined ? Number(body.category_id) : current.category_id;
+  const category = db.prepare('SELECT id FROM categories WHERE id = ?').get(categoryId);
+  if (!category) return res.status(400).json({ error: 'تصنيف غير صحيح' });
+  const assetStatus = body.asset_status === 'ready' ? 'ready' : 'default';
+  const assetPath = assetStatus === 'ready' ? String(body.asset_path ?? current.asset_path ?? '').trim() : '';
+  if (assetStatus === 'ready' && !assetPath.startsWith('/assets/'))
+    return res.status(400).json({ error: 'مسار الصورة يجب أن يبدأ بـ /assets/' });
+
+  const featured = body.is_featured === undefined ? (current.is_featured ? 1 : 0) : (body.is_featured ? 1 : 0);
+  const active = body.is_active === undefined ? (current.is_active ? 1 : 0) : (body.is_active ? 1 : 0);
+  db.prepare(`UPDATE products SET tool_name=?, category_id=?, asset_status=?, asset_path=?, is_featured=?, is_active=?
+    WHERE ${toolKeyWriteSql} = ?`).run(toolName, categoryId, assetStatus, assetPath, featured, active, toolKey);
+  res.json({ ok: true });
+});
+
+// ---------- Products / packages ----------
 router.get('/products', adminAuth, (req, res) => {
   const rows = db.prepare(`SELECT p.*, c.name AS category_name FROM products p
     JOIN categories c ON c.id = p.category_id ORDER BY p.id DESC`).all();
@@ -29,25 +143,29 @@ router.post('/products', adminAuth, (req, res) => {
   const p = req.body || {};
   if (!p.name || !p.category_id || !Number(p.price))
     return res.status(400).json({ error: 'الاسم والتصنيف والسعر مطلوبة' });
-  const r = db.prepare(`INSERT INTO products (category_id, name, description, price, old_price, emoji, gradient, is_featured, is_active, fields)
-    VALUES (?,?,?,?,?,?,?,?,?,?)`).run(
+  const toolName = String(p.tool_name || p.name).trim();
+  const toolKey = String(p.tool_key || slugifyToolKey(toolName));
+  const r = db.prepare(`INSERT INTO products (category_id, name, description, price, old_price, emoji, gradient, is_featured, is_active, fields, tool_key, tool_name, package_label, asset_status, asset_path)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
       Number(p.category_id), String(p.name), p.description || '', Number(p.price),
       p.old_price ? Number(p.old_price) : null, p.emoji || '🎁',
-      p.gradient || 'linear-gradient(135deg,#7c3aed,#4f46e5)',
+      p.gradient || 'linear-gradient(135deg,#0e7490,#0891b2)',
       p.is_featured ? 1 : 0, p.is_active === undefined ? 1 : (p.is_active ? 1 : 0),
-      JSON.stringify(normalizeFields(p.fields)));
+      JSON.stringify(normalizeFields(p.fields)), toolKey, toolName, p.package_label || 'باقة خدمة', 'default', '');
   res.json({ id: r.lastInsertRowid });
 });
 
 router.put('/products/:id', adminAuth, (req, res) => {
   const p = req.body || {};
+  const existing = db.prepare('SELECT * FROM products WHERE id = ?').get(Number(req.params.id));
+  if (!existing) return res.status(404).json({ error: 'الباقة غير موجودة' });
   db.prepare(`UPDATE products SET category_id=?, name=?, description=?, price=?, old_price=?,
-    emoji=?, gradient=?, is_featured=?, is_active=?, fields=? WHERE id=?`).run(
+    emoji=?, gradient=?, is_featured=?, is_active=?, fields=?, package_label=? WHERE id=?`).run(
       Number(p.category_id), String(p.name), p.description || '', Number(p.price),
       p.old_price ? Number(p.old_price) : null, p.emoji || '🎁',
-      p.gradient || 'linear-gradient(135deg,#7c3aed,#4f46e5)',
+      p.gradient || 'linear-gradient(135deg,#0e7490,#0891b2)',
       p.is_featured ? 1 : 0, p.is_active ? 1 : 0,
-      JSON.stringify(normalizeFields(p.fields)), Number(req.params.id));
+      JSON.stringify(normalizeFields(p.fields)), String(p.package_label || existing.package_label || 'باقة خدمة'), Number(req.params.id));
   res.json({ ok: true });
 });
 

@@ -6,20 +6,20 @@ export default function Footer() {
       <div className="container footer-inner">
         <div>
           <div className="brand-name">⚡ <b>chrigsm</b></div>
-          <p className="muted">متجرك الموثوق لأدوات التفعيل والتعبئة - تسليم فوري ودعم عبر واتساب.</p>
+          <p className="muted">منصة منظمة لاستعراض أدوات GSM واختيار باقات التفعيل أو التجديد أو الرصيد من مكان واحد.</p>
         </div>
         <div>
-          <h4>روابط</h4>
-          <Link to="/shop">المتجر</Link>
-          <Link to="/login">حسابي</Link>
+          <h4>الكتالوج</h4>
+          <Link to="/shop">كل الأدوات</Link>
+          <Link to="/shop?sort=price_asc">الباقات حسب السعر</Link>
         </div>
         <div>
-          <h4>المساعدة</h4>
-          <a href="https://wa.me/212600000000" target="_blank" rel="noreferrer">الدعم عبر واتساب</a>
-          <span className="muted">رد خلال دقائق ⏱️</span>
+          <h4>الحساب</h4>
+          <Link to="/login">تسجيل الدخول</Link>
+          <Link to="/profile">متابعة الطلبات</Link>
         </div>
       </div>
-      <div className="footer-bottom">© {new Date().getFullYear()} chrigsm - جميع الحقوق محفوظة</div>
+      <div className="footer-bottom">© {new Date().getFullYear()} chrigsm — جميع الحقوق محفوظة</div>
     </footer>
   );
 }

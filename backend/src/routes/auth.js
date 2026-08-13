@@ -4,7 +4,11 @@ import jwt from 'jsonwebtoken';
 import db from '../db.js';
 
 const router = Router();
-const SECRET = process.env.JWT_SECRET || 'store-secret-key-change-me';
+const isProduction = process.env.NODE_ENV === 'production';
+if (isProduction && !process.env.JWT_SECRET) {
+  throw new Error('JWT_SECRET مطلوب عند تشغيل chrigsm في بيئة الإنتاج');
+}
+const SECRET = process.env.JWT_SECRET || 'chrigsm-development-only-secret';
 
 export const sign = (user) => jwt.sign({ id: user.id, role: user.role }, SECRET, { expiresIn: '30d' });
 

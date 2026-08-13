@@ -5,8 +5,8 @@ import ProductCard from '../components/ProductCard.jsx';
 
 export default function Shop() {
   const [params, setParams] = useSearchParams();
-  const [products, setProducts] = useState([]);
-  const [cats, setCats] = useState([]);
+  const [tools, setTools] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState(params.get('q') || '');
   const [min, setMin] = useState('');
@@ -15,7 +15,7 @@ export default function Shop() {
   const category = params.get('category') || '';
 
   useEffect(() => {
-    api('/categories').then(setCats).catch(() => {});
+    api('/categories').then(setCategories).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -26,10 +26,10 @@ export default function Shop() {
     if (min) qs.set('min', min);
     if (max) qs.set('max', max);
     qs.set('sort', sort);
-    api(`/products?${qs}`).then(setProducts).catch(() => setProducts([])).finally(() => setLoading(false));
+    api(`/tools?${qs}`).then(setTools).catch(() => setTools([])).finally(() => setLoading(false));
   }, [category, q, min, max, sort]);
 
-  const setCat = (id) => {
+  const setCategory = (id) => {
     const next = new URLSearchParams(params);
     if (id) next.set('category', id); else next.delete('category');
     setParams(next);
@@ -38,12 +38,15 @@ export default function Shop() {
   return (
     <div className="container shop-page">
       <div className="shop-top">
-        <h1>المتجر</h1>
+        <div>
+          <div className="eyebrow">كتالوج chrigsm</div>
+          <h1>الأدوات والخدمات</h1>
+        </div>
         <input
           className="search-input"
-          placeholder="🔍 ابحث عن منتج، تفعيل، كود..."
+          placeholder="ابحث عن أداة أو خدمة…"
           value={q}
-          onChange={e => setQ(e.target.value)}
+          onChange={(event) => setQ(event.target.value)}
         />
       </div>
 
@@ -51,41 +54,35 @@ export default function Shop() {
         <aside className="filters">
           <div className="filter-group">
             <h4>التصنيفات</h4>
-            <button className={`fcat ${!category ? 'active' : ''}`} onClick={() => setCat('')}>الكل</button>
-            {cats.map(c => (
-              <button key={c.id} className={`fcat ${String(category) === String(c.id) ? 'active' : ''}`} onClick={() => setCat(c.id)}>
-                {c.emoji} {c.name} <span className="count">{c.product_count}</span>
+            <button className={`fcat ${!category ? 'active' : ''}`} onClick={() => setCategory('')}>كل الأدوات</button>
+            {categories.map((item) => (
+              <button key={item.id} className={`fcat ${String(category) === String(item.id) ? 'active' : ''}`} onClick={() => setCategory(item.id)}>
+                {item.emoji} {item.name} <span className="count">{item.product_count}</span>
               </button>
             ))}
           </div>
           <div className="filter-group">
-            <h4>السعر ({min || 0} - {max || '∞'})</h4>
+            <h4>سعر بداية الباقة ({min || 0} - {max || '∞'})</h4>
             <div className="price-inputs">
-              <input type="number" placeholder="من" value={min} onChange={e => setMin(e.target.value)} />
-              <input type="number" placeholder="إلى" value={max} onChange={e => setMax(e.target.value)} />
+              <input type="number" placeholder="من" value={min} onChange={(event) => setMin(event.target.value)} />
+              <input type="number" placeholder="إلى" value={max} onChange={(event) => setMax(event.target.value)} />
             </div>
           </div>
           <div className="filter-group">
             <h4>الترتيب</h4>
-            <select value={sort} onChange={e => setSort(e.target.value)}>
-              <option value="popular">الأكثر مبيعاً</option>
-              <option value="newest">الأحدث</option>
-              <option value="price_asc">السعر: من الأقل</option>
-              <option value="price_desc">السعر: من الأعلى</option>
+            <select value={sort} onChange={(event) => setSort(event.target.value)}>
+              <option value="popular">الأكثر استخداماً</option>
+              <option value="newest">الأحدث في الكتالوج</option>
+              <option value="price_asc">سعر البداية: الأقل</option>
+              <option value="price_desc">سعر البداية: الأعلى</option>
             </select>
           </div>
         </aside>
 
         <main className="shop-grid-wrap">
-          {loading ? (
-            <p className="muted">جارٍ التحميل...</p>
-          ) : products.length === 0 ? (
-            <div className="empty"><p>لا توجد منتجات مطابقة 😕</p></div>
-          ) : (
-            <div className="shop-grid">
-              {products.map(p => <ProductCard key={p.id} product={p} />)}
-            </div>
-          )}
+          {loading ? <p className="muted">جارٍ تحميل الأدوات…</p> : null}
+          {!loading && !tools.length ? <div className="empty"><p>لا توجد أدوات مطابقة لبحثك.</p></div> : null}
+          {!loading && tools.length ? <div className="shop-grid">{tools.map((tool) => <ProductCard key={tool.tool_key} product={tool} />)}</div> : null}
         </main>
       </div>
     </div>

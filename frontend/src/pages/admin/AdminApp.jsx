@@ -51,7 +51,8 @@ export default function AdminApp() {
         <nav>
           {[
             ['dashboard', '📊 لوحة المعلومات'],
-            ['products', '📦 المنتجات'],
+            ['tools', '🧰 الأدوات والباقات'],
+            ['products', '📦 الباقات الفردية'],
             ['categories', '🏷️ التصنيفات'],
             ['orders', '📋 الطلبات'],
             ['users', '👥 الزبناء'],
@@ -66,6 +67,7 @@ export default function AdminApp() {
       </aside>
       <main className="admin-main">
         {tab === 'dashboard' && <Dashboard go={setTab} />}
+        {tab === 'tools' && <Tools go={setTab} />}
         {tab === 'products' && <Products />}
         {tab === 'categories' && <Categories />}
         {tab === 'orders' && <Orders />}
@@ -84,9 +86,11 @@ function Dashboard({ go }) {
   if (!s) return <p className="muted">...</p>;
   const cards = [
     ['👥', s.users, 'زبون', () => go('users')],
-    ['📦', s.products, 'منتج', () => go('products')],
+    ['🧰', s.tools, 'أداة', () => go('tools')],
+    ['📦', s.products, 'باقة', () => go('products')],
+    ['🖼️', s.readyAssets + ' / ' + (s.readyAssets + s.pendingAssets), 'صور الأدوات', () => go('tools')],
     ['📋', s.orders, 'طلب', () => go('orders')],
-    ['💰', s.revenue + ' درهم', 'إيرادات', () => go('orders')],
+    ['💰', s.revenue + ' USD', 'إيرادات', () => go('orders')],
     ['⏳', s.pending, 'طلبات قيد المعالجة', () => go('orders')],
     ['🆕', s.today, 'طلبات اليوم', () => go('orders')],
     ['💳', s.pendingWallet, 'تعبئة بانتظار الموافقة', () => go('wallet')],
@@ -102,6 +106,135 @@ function Dashboard({ go }) {
             <span>{l}</span>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function Tools({ go }) {
+  const [tools, setTools] = useState([]);
+  const [cats, setCats] = useState([]);
+  const [selected, setSelected] = useState(null);
+  const [form, setForm] = useState(null);
+  const [q, setQ] = useState('');
+  const [filter, setFilter] = useState('all');
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState('');
+  const [err, setErr] = useState('');
+
+  const load = () => {
+    api('/admin/tools').then(setTools).catch((e) => setErr(e.message));
+    api('/admin/categories').then(setCats).catch(() => {});
+  };
+  useEffect(load, []);
+
+  const openTool = async (toolKey) => {
+    setErr(''); setMsg('');
+    try {
+      const data = await api(`/admin/tools/${encodeURIComponent(toolKey)}`);
+      setSelected(data);
+      setForm({
+        tool_name: data.tool.tool_name || '',
+        category_id: String(data.tool.category_id || ''),
+        asset_status: data.tool.asset_status === 'ready' ? 'ready' : 'default',
+        asset_path: data.tool.asset_path?.startsWith('/assets/') ? data.tool.asset_path : '',
+        is_featured: !!data.tool.is_featured,
+        is_active: !!data.tool.is_active,
+      });
+    } catch (e) { setErr(e.message); }
+  };
+
+  const save = async (e) => {
+    e.preventDefault();
+    if (!selected || !form) return;
+    setSaving(true); setErr(''); setMsg('');
+    try {
+      await api(`/admin/tools/${encodeURIComponent(selected.tool.tool_key)}`, { method: 'PUT', body: form });
+      setMsg('تم حفظ بيانات الأداة وتطبيقها على جميع باقاتها.');
+      await openTool(selected.tool.tool_key);
+      load();
+    } catch (e) { setErr(e.message); }
+    finally { setSaving(false); }
+  };
+
+  const exportAssetQueue = async () => {
+    setErr(''); setMsg('');
+    try {
+      const queue = await api('/admin/tools/assets/queue');
+      const blob = new Blob([JSON.stringify(queue, null, 2)], { type: 'application/json' });
+      const href = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = href;
+      anchor.download = 'chrigsm-tools-needing-images.json';
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(href);
+      setMsg(`تم تصدير ${queue.total} أداة تحتاج مراجعة صورة.`);
+    } catch (e) { setErr(e.message); }
+  };
+
+  const visible = tools.filter((tool) => {
+    const matchesSearch = `${tool.tool_name} ${tool.category_name}`.toLowerCase().includes(q.toLowerCase());
+    const matchesFilter = filter === 'all' || (filter === 'ready' ? tool.asset_status === 'ready' : tool.asset_status !== 'ready');
+    return matchesSearch && matchesFilter;
+  });
+
+  return (
+    <div className="admin-panel tools-panel">
+      <div className="admin-heading">
+        <div><div className="eyebrow">كتالوج chrigsm</div><h1>الأدوات والباقات</h1><p className="muted">صورة واحدة لكل أداة، ثم باقاتها ومددها داخلها.</p></div>
+        <div className="admin-heading-actions"><button className="btn btn-outline btn-sm" onClick={exportAssetQueue}>تصدير الصور الناقصة</button><button className="btn btn-outline btn-sm" onClick={load}>تحديث القائمة</button></div>
+      </div>
+      <div className="tool-admin-controls">
+        <input className="input" placeholder="ابحث عن أداة…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <div className="filter-row">
+          {[['all', 'كل الأدوات'], ['ready', 'بصورة جاهزة'], ['default', 'تحتاج صورة']].map(([key, label]) => (
+            <button key={key} className={`btn btn-sm ${filter === key ? 'btn-primary' : 'btn-outline'}`} onClick={() => setFilter(key)}>{label}</button>
+          ))}
+        </div>
+      </div>
+      {err && <p className="error-txt">{err}</p>}
+      <div className="tools-admin-layout">
+        <div className="tool-admin-list">
+          <p className="muted small">{visible.length} أداة معروضة</p>
+          {visible.map((tool) => (
+            <button key={tool.tool_key} className={`tool-admin-card ${selected?.tool?.tool_key === tool.tool_key ? 'selected' : ''}`} onClick={() => openTool(tool.tool_key)}>
+              <img src={tool.asset_path} alt="" />
+              <span className="tool-admin-copy"><b>{tool.tool_name}</b><small>{tool.category_name} · {tool.package_count} باقات · من {tool.price} USD</small></span>
+              <span className={`asset-status ${tool.asset_status === 'ready' ? 'ready' : 'default'}`}>{tool.asset_status === 'ready' ? 'صورة جاهزة' : 'افتراضية'}</span>
+            </button>
+          ))}
+          {!visible.length && <div className="empty"><p>لا توجد أدوات مطابقة.</p></div>}
+        </div>
+        <div className="tool-admin-detail">
+          {!selected || !form ? <div className="empty"><p>اختر أداة من القائمة لإدارة صورتها وباقاتها.</p></div> : (
+            <>
+              <div className="tool-admin-preview">
+                <img src={form.asset_status === 'ready' && form.asset_path ? form.asset_path : '/assets/chrigsm-default-service-hero.png'} alt="معاينة الأداة" />
+                <div><span className="asset-status ready">{selected.tool.package_count} باقات</span><h2>{selected.tool.tool_name}</h2><p className="muted">تغييرات هذه الشاشة تُطبق على الأداة فقط، لا على أسعار الباقات أو حقولها.</p></div>
+              </div>
+              <form className="admin-form tool-edit-form" onSubmit={save}>
+                <label className="field-label">اسم الأداة الموحد</label>
+                <input className="input" value={form.tool_name} onChange={(e) => setForm({ ...form, tool_name: e.target.value })} required />
+                <label className="field-label">التصنيف</label>
+                <select className="input" value={form.category_id} onChange={(e) => setForm({ ...form, category_id: e.target.value })}>{cats.map((c) => <option key={c.id} value={c.id}>{c.emoji} {c.name}</option>)}</select>
+                <label className="field-label">مصدر الصورة</label>
+                <select className="input" value={form.asset_status} onChange={(e) => setForm({ ...form, asset_status: e.target.value })}><option value="default">الصورة الافتراضية لـ chrigsm</option><option value="ready">صورة أداة محفوظة</option></select>
+                {form.asset_status === 'ready' && <><label className="field-label">مسار الصورة داخل الموقع</label><input className="input" dir="ltr" value={form.asset_path} onChange={(e) => setForm({ ...form, asset_path: e.target.value })} placeholder="/assets/tools/example.png" required /><p className="muted small">ارفع أو انسخ الملف أولاً إلى `frontend/public/assets/tools/` ثم اكتب مساره هنا.</p></>}
+                <label className="check"><input type="checkbox" checked={form.is_featured} onChange={(e) => setForm({ ...form, is_featured: e.target.checked })} /> تظهر ضمن الأدوات المختارة</label>
+                <label className="check"><input type="checkbox" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} /> الأداة متاحة للزبائن</label>
+                <button className="btn btn-primary" disabled={saving}>{saving ? 'جارٍ الحفظ…' : 'حفظ بيانات الأداة'}</button>
+                <button type="button" className="btn btn-outline" onClick={() => go('products')}>إدارة الباقات الفردية</button>
+                {msg && <p className="ok-txt">{msg}</p>}
+              </form>
+              <div className="tool-package-list">
+                <div className="section-head"><h3>باقات الأداة</h3><span className="muted small">يمكن تعديل السعر والحقول من تبويب الباقات الفردية.</span></div>
+                {selected.packages.map((item) => <div className="tool-package-row" key={item.id}><div><b>{item.package_label || item.name}</b><small>{item.delivery_time || 'حسب الخدمة'} · {(item.fields || []).length} حقول</small></div><strong>{item.price} USD</strong></div>)}
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -141,11 +274,13 @@ function Products() {
     <div className="admin-panel">
       <h1>المنتجات</h1>
       <form className="admin-form" onSubmit={save}>
-        <input className="input" name="name" placeholder="اسم المنتج" defaultValue={editing?.name} required />
+        {!editing && <input className="input" name="tool_name" placeholder="اسم الأداة الموحد (مثال: Unlock Tool)" />}
+        <input className="input" name="name" placeholder="اسم الباقة أو الخدمة" defaultValue={editing?.name} required />
+        <input className="input" name="package_label" placeholder="وسم الباقة (مثال: 6 Hours أو 1 Year)" defaultValue={editing?.package_label || ''} />
         <select className="input" name="category_id" defaultValue={editing?.category_id}>
           {cats.map(c => <option key={c.id} value={c.id}>{c.emoji} {c.name}</option>)}
         </select>
-        <input className="input" type="number" name="price" placeholder="السعر" defaultValue={editing?.price} required />
+        <input className="input" type="number" name="price" placeholder="السعر (USD)" defaultValue={editing?.price} required />
         <input className="input" type="number" name="old_price" placeholder="السعر قبل الخصم (اختياري)" defaultValue={editing?.old_price || ''} />
         <input className="input" name="emoji" placeholder="إيموجي" defaultValue={editing?.emoji || '🎁'} />
         <textarea className="input" name="description" rows="2" placeholder="الوصف" defaultValue={editing?.description} />
@@ -179,7 +314,7 @@ function Products() {
             <span className="row-emoji" style={{ background: p.gradient }}>{p.emoji}</span>
             <div className="row-main">
               <b>{p.name}</b>
-              <span className="muted small">{p.category_name} · {p.price} درهم{p.old_price ? ` / ${p.old_price}` : ''} · {p.sold_count} بيع</span>
+              <span className="muted small">{p.category_name} · {p.price} USD{p.old_price ? ` / ${p.old_price}` : ''} · {p.sold_count} بيع</span>
               {(p.fields || []).length > 0 && (
                 <span className="muted small"> · 📝 {(p.fields || []).map(f => f.label).join('، ')}</span>
               )}
@@ -282,7 +417,7 @@ function Orders() {
                 </div>
               ))}
             </div>
-            <b>{o.total} درهم</b>
+            <b>{o.total} USD</b>
             <span className={`status-pill ${o.status}`}>{o.status_text}</span>
             <div className="status-actions">
               <button className="btn btn-success btn-sm" disabled={o.status === 'success'} onClick={() => setStatus(o.id, 'success')}>ناجح</button>
@@ -319,7 +454,7 @@ function Users() {
           <div className="admin-row" key={u.id}>
             <div className="row-main">
               <b>{u.name} ({u.phone})</b>
-              <span className="muted small">{u.orders_count} طلب · رصيد {u.balance} درهم</span>
+              <span className="muted small">{u.orders_count} طلب · رصيد {u.balance} USD</span>
             </div>
             <div className="inline-form">
               <input className="input input-sm" type="number" placeholder="± مبلغ" value={amounts[u.id] || ''} onChange={e => setAmounts({ ...amounts, [u.id]: e.target.value })} />
@@ -350,7 +485,7 @@ function WalletReq() {
               <b>{w.user_name} ({w.user_phone})</b>
               <span className="muted small">{w.method === 'crypto' ? 'عملة رقمية' : 'تحويل بنكي'}{w.ref ? ' · مرجع: ' + w.ref : ''} · {w.created_at}</span>
             </div>
-            <b className="pos">+{w.amount} درهم</b>
+            <b className="pos">+{w.amount} USD</b>
             <button className="btn btn-success btn-sm" onClick={async () => { await api(`/admin/wallet/requests/${w.id}/approve`, { method: 'POST' }); load(); }}>موافقة</button>
             <button className="btn btn-danger btn-sm" onClick={async () => { await api(`/admin/wallet/requests/${w.id}/reject`, { method: 'POST' }); load(); }}>رفض</button>
           </div>
@@ -390,7 +525,7 @@ function Vouchers() {
         {list.map(v => (
           <div className="admin-row" key={v.id}>
             <b>{v.code}</b>
-            <b>{v.amount} درهم</b>
+            <b>{v.amount} USD</b>
             <span className={`status-pill ${v.used ? 'success' : 'pending'}`}>{v.used ? `مستعمل بواسطة ${v.used_by_name}` : 'غير مستعمل'}</span>
           </div>
         ))}
@@ -417,6 +552,8 @@ function Settings() {
       <form className="admin-form" onSubmit={save}>
         <label className="field-label">اسم المتجر</label>
         <input className="input" name="store_name" defaultValue={s.store_name} />
+        <label className="field-label">عملة العرض</label>
+        <select className="input" name="currency" defaultValue={s.currency || 'USD'}><option value="USD">USD</option><option value="MAD">MAD</option><option value="EUR">EUR</option></select>
         <label className="field-label">رقم واتساب (مثال: 0612345678)</label>
         <input className="input" name="whatsapp_number" defaultValue={s.whatsapp_number} dir="ltr" />
         <label className="field-label">رابط API الواتساب (اختياري — بوابات مثل GreenAPI / UltraMsg)</label>

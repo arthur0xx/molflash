@@ -1,69 +1,189 @@
 import db from './db.js';
 import bcrypt from 'bcryptjs';
+import fs from 'fs';
 
-export default function seed() {
-  const count = db.prepare('SELECT COUNT(*) AS c FROM categories').get().c;
-  if (count > 0) return;
+const catalogPath = new URL('./data/gsm-services.json', import.meta.url);
+const sourceCatalog = JSON.parse(fs.readFileSync(catalogPath, 'utf8'));
 
-  const insertCat = db.prepare('INSERT INTO categories (name, emoji, description, sort_order) VALUES (?,?,?,?)');
-  const cats = [
-    ['تفعيل عراق سيرفر', '🎮', 'تفعيلات وأكواد عراق سيرفر بكل المدد', 1],
-    ['تفعيل حلا تيك', '📱', 'تفعيلات حلا تيك والحسابات الجاهزة', 2],
-    ['تطبيقات برو', '🚀', 'تفعيل التطبيقات المدفوعة بنسخ برو', 3],
-    ['ألعاب', '🕹️', 'شحن وتفعيل الألعاب الشهيرة', 4],
-    ['اشتراكات', '📺', 'اشتراكات المنصات مثل نتفليكس وسبوتيفاي', 5],
-    ['أكواد تعبئة', '💳', 'أكواد تعبئة الرصيد الفورية', 6],
-  ];
-  const catIds = [];
-  for (const c of cats) {
-    const r = insertCat.run(...c);
-    catIds.push(r.lastInsertRowid);
+const DEMO_PHONES = ['0600000000', '0611111111', '0622222222'];
+const DEMO_VOUCHERS = ['TARBIB-20', 'TARBIB-50', 'MARHABA-100'];
+
+const paletteByType = {
+  SERVER: { emoji: '🔑', gradient: 'linear-gradient(135deg,#0f766e,#0891b2)', label: 'تفعيل وأدوات' },
+  IMEI: { emoji: '📱', gradient: 'linear-gradient(135deg,#2563eb,#7c3aed)', label: 'خدمات أجهزة' },
+  REMOTE: { emoji: '🧰', gradient: 'linear-gradient(135deg,#b45309,#ea580c)', label: 'خدمات عن بُعد' },
+};
+
+function compactText(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function serviceFields(service) {
+  const fields = [];
+  const primary = service.CUSTOM;
+  if (primary?.allow === '1' && primary.customname) {
+    fields.push({
+      key: 'primary_input',
+      label: compactText(primary.customname),
+      type: 'text',
+      required: true,
+    });
   }
 
-  const insertProduct = db.prepare(`INSERT INTO products
-    (category_id, name, description, price, old_price, emoji, gradient, is_featured, sold_count)
-    VALUES (?,?,?,?,?,?,?,?,?)`);
+  for (const [index, input] of (service['Requires.Custom'] || []).entries()) {
+    const label = compactText(input.fieldname);
+    if (!label || fields.some((field) => field.label === label)) continue;
+    fields.push({
+      key: `field_${index + 1}`,
+      label,
+      type: input.fieldtype === 'textarea' ? 'textarea' : 'text',
+      required: input.required === 'on',
+    });
+  }
+  return fields;
+}
 
-  const products = [
-    [catIds[0], 'تفعيل عراق سيرفر - شهر واحد', 'تفعيل سريع خلال دقائق. تدخل لحمّل معانا وتوصلك معلومات الدخول في حسابك مباشرة بعد الشراء.', 25, 35, '🎮', 'linear-gradient(135deg,#16a34a,#059669)', 1, 120],
-    [catIds[0], 'تفعيل عراق سيرفر - 3 أشهر', 'باقة 3 أشهر بأفضل سعر. تجديد تلقائي اختياري.', 60, 80, '🎮', 'linear-gradient(135deg,#2563eb,#7c3aed)', 1, 89],
-    [catIds[0], 'تفعيل عراق سيرفر - 6 أشهر', 'باقة نصف سنوية بسعر مخفض.', 100, 130, '🎮', 'linear-gradient(135deg,#7c3aed,#c026d3)', 0, 45],
-    [catIds[0], 'تفعيل عراق سيرفر - سنة كاملة', 'أفضل قيمة: سنة كاملة بأقل سعر.', 170, 240, '🎮', 'linear-gradient(135deg,#f59e0b,#ef4444)', 1, 60],
-    [catIds[1], 'تفعيل حلا تيك - شهر', 'تفعيل اشتراك حلا تيك لمدة شهر.', 30, 45, '📱', 'linear-gradient(135deg,#0ea5e9,#6366f1)', 1, 150],
-    [catIds[1], 'تفعيل حلا تيك - 3 أشهر', 'باقة 3 أشهر لتفعيل حلا تيك.', 75, 100, '📱', 'linear-gradient(135deg,#06b6d4,#0ea5e9)', 0, 70],
-    [catIds[1], 'حساب حلا تيك بريميوم جاهز', 'حساب جاهز مع ضمان 30 يوم.', 90, 120, '📱', 'linear-gradient(135deg,#8b5cf6,#6d28d9)', 0, 33],
-    [catIds[2], 'تفعيل تطبيق VIP - دائم', 'تفعيل دائم للتطبيق على نفس الحساب.', 40, 60, '🚀', 'linear-gradient(135deg,#f43f5e,#fb923c)', 0, 200],
-    [catIds[2], 'باقة تطبيقات برو الشاملة', 'مجموعة تطبيقات برو مشتركة بسعر رمزي.', 55, 90, '🚀', 'linear-gradient(135deg,#d946ef,#8b5cf6)', 1, 78],
-    [catIds[3], 'شحن جواهر لعبة 100', 'شحن جواهر للعبة الشهيرة فوري.', 20, 30, '🕹️', 'linear-gradient(135deg,#22c55e,#16a34a)', 0, 95],
-    [catIds[3], 'شحن عملات لعبة 500', '500 عملة داخل اللعبة خلال دقائق.', 45, 60, '🕹️', 'linear-gradient(135deg,#eab308,#f97316)', 0, 42],
-    [catIds[4], 'اشتراك نتفليكس - شهر', 'اشتراك خاص لمدة شهر بجودة عالية.', 35, 50, '📺', 'linear-gradient(135deg,#ef4444,#7f1d1d)', 1, 55],
-    [catIds[4], 'اشتراك سبوتيفاي بريميوم - شهر', 'اشتراك سبوتيفاي بريميوم خاص.', 25, 40, '📺', 'linear-gradient(135deg,#22c55e,#0f766e)', 0, 61],
-    [catIds[5], 'كود تعبئة 20 درهم', 'كود تعبئة فوري يصل لمحفظتك مباشرة.', 20, 20, '💳', 'linear-gradient(135deg,#6366f1,#4338ca)', 1, 500],
-    [catIds[5], 'كود تعبئة 50 درهم', 'كود تعبئة 50 درهم بقيمة كاملة.', 50, 50, '💳', 'linear-gradient(135deg,#10b981,#047857)', 0, 300],
-    [catIds[5], 'كود تعبئة 100 درهم', 'أفضل خيار للتعبئة الكبيرة.', 100, 100, '💳', 'linear-gradient(135deg,#f59e0b,#b45309)', 1, 120],
-  ];
-  for (const p of products) insertProduct.run(...p);
+function toolDescriptor(serviceName) {
+  const rawName = compactText(serviceName);
+  const packageWords = /\b(?:rent(?:\s+for)?|activation|license|subscription|renew(?:al)?|recharge(?:\s+your)?\s+balance|credit(?:s|\s+refill)?|refill)\b/gi;
+  const toolName = compactText(rawName
+    .replace(/\[[^\]]*\]/g, '')
+    .replace(/\([^)]*\)/g, '')
+    .replace(/\b\d+\s*(?:months?|years?|days?|hours?|pcs?|users?|accounts?)\b/gi, '')
+    .replace(/\b(?:new|existing)\s+users?\b/gi, '')
+    .replace(packageWords, '')
+    .replace(/[\[\]]/g, '')
+    .replace(/\s*[-–—]\s*/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim());
 
-  const hashed = bcrypt.hashSync('admin123', 10);
-  db.prepare('INSERT OR IGNORE INTO users (name, phone, password, balance, role) VALUES (?,?,?,?,?)')
-    .run('المدير', '0600000000', hashed, 0, 'admin');
+  const duration = rawName.match(/\b\d+\s*(?:months?|years?|days?|hours?)\b/i)?.[0] || '';
+  const credit = /\b(?:credits?|recharge|refill)\b/i.test(rawName) ? 'رصيد' : '';
+  const renewal = /\b(?:renew|refill|recharge)\b/i.test(rawName) ? 'تجديد' : '';
+  const packageLabel = [duration, credit, renewal].filter(Boolean).join(' · ') || 'باقة خدمة';
+  const safeToolName = toolName || rawName;
+  const toolKey = safeToolName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || `service-${Date.now()}`;
+  return { toolName: safeToolName, toolKey, packageLabel };
+}
 
-  const u1 = bcrypt.hashSync('customer123', 10);
-  const u2 = bcrypt.hashSync('customer123', 10);
-  db.prepare('INSERT OR IGNORE INTO users (name, phone, password, balance, role) VALUES (?,?,?,?,?)')
-    .run('زبون تجريبي', '0611111111', u1, 120, 'customer');
-  db.prepare('INSERT OR IGNORE INTO users (name, phone, password, balance, role) VALUES (?,?,?,?,?)')
-    .run('زبون تجريبي 2', '0622222222', u2, 45, 'customer');
+function isDemoOnlyDatabase() {
+  const totalProducts = db.prepare('SELECT COUNT(*) AS c FROM products').get().c;
+  const importedProducts = db.prepare("SELECT COUNT(*) AS c FROM products WHERE source_service_id != ''").get().c;
+  const demoUsers = db.prepare(`SELECT COUNT(*) AS c FROM users WHERE phone IN (${DEMO_PHONES.map(() => '?').join(',')})`).get(...DEMO_PHONES).c;
+  return totalProducts > 0 && importedProducts === 0 && demoUsers > 0;
+}
 
-  const vouchers = db.prepare('INSERT OR IGNORE INTO vouchers (code, amount) VALUES (?,?)');
-  vouchers.run('TARBIB-20', 20);
-  vouchers.run('TARBIB-50', 50);
-  vouchers.run('MARHABA-100', 100);
+function removeKnownDemoData() {
+  const demoUsers = db.prepare(`SELECT id FROM users WHERE phone IN (${DEMO_PHONES.map(() => '?').join(',')})`).all(...DEMO_PHONES);
+  const demoUserIds = demoUsers.map((user) => user.id);
 
-  db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('whatsapp_number', '212600000000')").run();
-  db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('whatsapp_api', '')").run();
-  db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('currency', 'درهم')").run();
-  db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('store_name', 'chrigsm')").run();
+  if (demoUserIds.length) {
+    const placeholders = demoUserIds.map(() => '?').join(',');
+    db.prepare(`DELETE FROM order_items WHERE order_id IN (SELECT id FROM orders WHERE user_id IN (${placeholders}))`).run(...demoUserIds);
+    db.prepare(`DELETE FROM orders WHERE user_id IN (${placeholders})`).run(...demoUserIds);
+    db.prepare(`DELETE FROM wallet_transactions WHERE user_id IN (${placeholders})`).run(...demoUserIds);
+    db.prepare(`DELETE FROM notifications WHERE user_id IN (${placeholders})`).run(...demoUserIds);
+    db.prepare(`DELETE FROM users WHERE id IN (${placeholders})`).run(...demoUserIds);
+  }
 
-  console.log('✅ تم تجهيز قاعدة البيانات ببيانات تجريبية');
+  db.prepare(`DELETE FROM vouchers WHERE code IN (${DEMO_VOUCHERS.map(() => '?').join(',')})`).run(...DEMO_VOUCHERS);
+  db.prepare('DELETE FROM order_items WHERE product_id IN (SELECT id FROM products)').run();
+  db.prepare('DELETE FROM products').run();
+  db.prepare('DELETE FROM categories').run();
+}
+
+function setInitialSettings() {
+  const set = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?,?)');
+  set.run('store_name', 'chrigsm');
+  set.run('currency', 'USD');
+  set.run('whatsapp_number', '');
+  set.run('whatsapp_api', '');
+  set.run('whatsapp_token', '');
+  db.prepare("UPDATE settings SET value = 'chrigsm' WHERE key = 'store_name' AND value = 'MolFlash'").run();
+  set.run('catalog_mode', 'static_import');
+  set.run('catalog_imported_at', new Date().toISOString());
+}
+
+function bootstrapAdmin() {
+  const phone = compactText(process.env.ADMIN_PHONE);
+  const password = String(process.env.ADMIN_PASSWORD || '');
+  const name = compactText(process.env.ADMIN_NAME) || 'مدير chrigsm';
+  if (!phone || !password) return;
+  if (db.prepare("SELECT id FROM users WHERE role = 'admin' LIMIT 1").get()) return;
+
+  const hash = bcrypt.hashSync(password, 12);
+  db.prepare('INSERT INTO users (name, phone, password, role) VALUES (?,?,?,?)')
+    .run(name, phone, hash, 'admin');
+  console.log('✅ تم إنشاء حساب المدير من متغيرات البيئة');
+}
+
+export default function seed() {
+  setInitialSettings();
+  db.prepare("UPDATE products SET description = REPLACE(description, 'MolFlash', 'chrigsm') WHERE description LIKE '%MolFlash%'").run();
+  bootstrapAdmin();
+  const existingImported = db.prepare("SELECT COUNT(*) AS c FROM products WHERE source_service_id != ''").get().c;
+  if (existingImported > 0) return;
+
+  const importCatalog = db.transaction(() => {
+    if (isDemoOnlyDatabase()) removeKnownDemoData();
+
+    const remainingProducts = db.prepare('SELECT COUNT(*) AS c FROM products').get().c;
+    if (remainingProducts > 0) return;
+
+    const insertCategory = db.prepare('INSERT INTO categories (name, emoji, description, sort_order) VALUES (?,?,?,?)');
+    const insertService = db.prepare(`INSERT INTO products
+      (category_id, name, description, price, emoji, gradient, is_featured, is_active, sold_count, fields, source_service_id, service_type, delivery_time, tool_key, tool_name, package_label, asset_status, asset_path)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
+
+    let categoryOrder = 0;
+    let featuredCount = 0;
+    for (const group of Object.values(sourceCatalog)) {
+      const groupType = compactText(group.GROUPTYPE).toUpperCase() || 'SERVER';
+      const style = paletteByType[groupType] || paletteByType.SERVER;
+      const services = Object.values(group.SERVICES || {});
+      if (!services.length) continue;
+
+      const categoryId = insertCategory.run(
+        compactText(group.GROUPNAME),
+        style.emoji,
+        `${style.label} — ${services.length} خدمة. اختر الخدمة ثم أضف المعلومات المطلوبة.`,
+        categoryOrder++,
+      ).lastInsertRowid;
+
+      for (const [serviceIndex, service] of services.entries()) {
+        const price = Number(service.CREDIT);
+        const duration = compactText(service.TIME) || 'حسب تفاصيل الخدمة';
+        const name = compactText(service.SERVICENAME);
+        const { toolName, toolKey, packageLabel } = toolDescriptor(name);
+        const description = `${toolName} — ${packageLabel}. خدمة ${style.label} عبر MolFlash، بزمن تنفيذ متوقع: ${duration}. ستظهر الحقول المطلوبة قبل تأكيد الطلب.`;
+        const isFeatured = serviceIndex === 0 && featuredCount < 12 ? 1 : 0;
+        if (isFeatured) featuredCount += 1;
+
+        insertService.run(
+          categoryId,
+          name,
+          description,
+          Number.isFinite(price) ? price : 0,
+          style.emoji,
+          style.gradient,
+          isFeatured,
+          1,
+          0,
+          JSON.stringify(serviceFields(service)),
+          String(service.SERVICEID || ''),
+          groupType,
+          duration,
+          toolKey,
+          toolName,
+          packageLabel,
+          'default',
+          '',
+        );
+      }
+    }
+  });
+
+  importCatalog();
+  const count = db.prepare("SELECT COUNT(*) AS c FROM products WHERE source_service_id != ''").get().c;
+  console.log(`✅ تم استيراد ${count} خدمة محلية إلى كتالوج chrigsm دون ربط API مباشر`);
 }

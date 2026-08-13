@@ -76,7 +76,7 @@ export default function Profile() {
         </div>
         <div className="profile-balance">
           <small>رصيد المحفظة</small>
-          <b>💳 {user.balance} درهم</b>
+          <b>💳 {user.balance} USD</b>
         </div>
       </div>
 
@@ -93,7 +93,7 @@ export default function Profile() {
               <b>{orders.length}</b><span>طلباتي</span>
             </div>
             <div className="ov-card" onClick={() => setTab('wallet')}>
-              <b>{user.balance}</b><span>رصيدي (درهم)</span>
+              <b>{user.balance}</b><span>رصيدي (USD)</span>
             </div>
             <div className="ov-card" onClick={() => setTab('notifications')}>
               <b>{notifications.filter(n => !n.is_read).length}</b><span>إشعارات جديدة</span>
@@ -125,7 +125,7 @@ export default function Profile() {
                 </div>
                 <div className="order-bottom">
                   <span className="muted">{o.created_at.replace('T', ' ')}</span>
-                  <b>{o.total} درهم</b>
+                  <b>{o.total} USD</b>
                   <button className="btn btn-outline btn-sm" onClick={() => waOrder(o)}>💬 واتساب</button>
                 </div>
               </div>
@@ -136,10 +136,10 @@ export default function Profile() {
         {tab === 'wallet' && (
           <div className="wallet-layout">
             <div className="wallet-recharge">
-              <div className="balance-hero">💳 {user.balance} <small>درهم</small></div>
+              <div className="balance-hero">💳 {user.balance} <small>USD</small></div>
               <h3>طريقة 1: كود تعبئة فوري</h3>
               <div className="flex-row">
-                <input className="input" placeholder="أدخل الكود (مثال: TARBIB-20)" value={code} onChange={e => setCode(e.target.value)} />
+                <input className="input" placeholder="أدخل كود التعبئة" value={code} onChange={e => setCode(e.target.value)} />
                 <button className="btn btn-primary" onClick={redeem}>تفعيل</button>
               </div>
               <h3>طريقة 2: تحويل بنكي / عملة رقمية</h3>
@@ -147,7 +147,7 @@ export default function Profile() {
                 <option value="bank">تحويل بنكي</option>
                 <option value="crypto">عملة رقمية (USDT/TRC20)</option>
               </select>
-              <input className="input" type="number" placeholder="المبلغ بالدرهم" value={amount} onChange={e => setAmount(e.target.value)} />
+              <input className="input" type="number" placeholder="المبلغ بالدولار" value={amount} onChange={e => setAmount(e.target.value)} />
               <input className="input" placeholder="مرجع التحويل / رقم العملية (اختياري)" value={ref} onChange={e => setRef(e.target.value)} />
               <button className="btn btn-outline btn-block" onClick={bankReq}>إرسال طلب التعبئة</button>
               {msg && <p className="ok-txt">{msg}</p>}
@@ -164,7 +164,7 @@ export default function Profile() {
                     <span className="muted small">{t.created_at}</span>
                   </div>
                   <span className={t.amount > 0 ? 'pos' : 'neg'}>
-                    {t.amount > 0 ? '+' : ''}{t.amount} درهم
+                    {t.amount > 0 ? '+' : ''}{t.amount} USD
                   </span>
                 </div>
               ))}

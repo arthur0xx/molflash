@@ -1,18 +1,18 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api.js';
 import ProductCard from '../components/ProductCard.jsx';
 
-function HScroll({ title, emoji, products }) {
+function HScroll({ title, emoji, tools }) {
   return (
     <section className="home-section">
       <div className="container">
         <div className="section-head">
           <h2>{emoji} {title}</h2>
-          <Link to="/shop" className="see-all">عرض الكل ←</Link>
+          <Link to="/shop" className="see-all">عرض جميع الأدوات ←</Link>
         </div>
         <div className="h-scroll">
-          {products.map(p => <ProductCard key={p.id} product={p} />)}
+          {tools.map((tool) => <ProductCard key={tool.tool_key} product={tool} />)}
         </div>
       </div>
     </section>
@@ -21,42 +21,39 @@ function HScroll({ title, emoji, products }) {
 
 export default function Home() {
   const [featured, setFeatured] = useState([]);
-  const [cats, setCats] = useState([]);
-  const [all, setAll] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [tools, setTools] = useState([]);
   const [settings, setSettings] = useState({});
 
   useEffect(() => {
-    api('/products/featured').then(setFeatured).catch(() => {});
-    api('/categories').then(setCats).catch(() => {});
-    api('/products').then(setAll).catch(() => {});
+    api('/tools/featured').then(setFeatured).catch(() => {});
+    api('/categories').then(setCategories).catch(() => {});
+    api('/tools').then(setTools).catch(() => {});
     api('/settings').then(setSettings).catch(() => {});
   }, []);
 
-  const currency = settings.currency || 'درهم';
+  const toolsByCategory = useMemo(() => new Map(
+    categories.map((category) => [category.id, tools.filter((tool) => tool.category_id === category.id)]),
+  ), [categories, tools]);
 
   return (
     <div>
-      <section className="hero">
+      <section className="hero hero-chrigsm">
+        <div className="hero-backdrop" aria-hidden="true" />
         <div className="container hero-inner">
           <div className="hero-text">
-            <h1>متجر <span>chrigsm</span></h1>
-            <p>تفعيلات فورية لعِراق سيرفر وحلا تيك والتطبيقات والألعاب، أكواد تعبئة، واشتراكات — تسليم سريع ودفع آمن عبر محفظتك.</p>
+            <div className="eyebrow">CHRIGSM · GSM SERVICES</div>
+            <h1>أدواتك وباقاتك في <span>{settings.store_name || 'chrigsm'}</span></h1>
+            <p>اختر الأداة أولاً، ثم حدّد الباقة المناسبة—مدة، تجديد، رصيد أو خدمة محددة—من شاشة واحدة واضحة في chrigsm.</p>
             <div className="hero-cta">
-              <Link to="/shop" className="btn btn-light btn-lg">تسوّق الآن</Link>
-              <a className="btn btn-ghost btn-lg" href="#featured">منتجات مميزة 🔥</a>
+              <Link to="/shop" className="btn btn-light btn-lg">استعرض الأدوات</Link>
+              <a className="btn btn-ghost btn-lg" href="#featured">الأدوات المختارة</a>
             </div>
             <div className="hero-stats">
-              <div><b>+3000</b><span>عملية ناجحة</span></div>
-              <div><b>+1200</b><span>زبون</span></div>
-              <div><b>24/7</b><span>دعم واتساب</span></div>
+              <div><b>{tools.length || '—'}</b><span>أداة متاحة</span></div>
+              <div><b>{categories.length || '—'}</b><span>تصنيف خدمة</span></div>
+              <div><b>24/7</b><span>متابعة الطلبات</span></div>
             </div>
-          </div>
-          <div className="hero-art" aria-hidden="true">
-            <div className="card-float c1">🎮 عراق سيرفر</div>
-            <div className="card-float c2">📱 حلا تيك</div>
-            <div className="card-float c3">💳 أكواد تعبئة</div>
-            <div className="orb o1" />
-            <div className="orb o2" />
           </div>
         </div>
       </section>
@@ -64,44 +61,44 @@ export default function Home() {
       <section className="home-section">
         <div className="container">
           <div className="cat-chips">
-            <Link to="/shop" className="chip active">الكل</Link>
-            {cats.map(c => (
-              <Link key={c.id} to={`/shop?category=${c.id}`} className="chip">{c.emoji} {c.name}</Link>
+            <Link to="/shop" className="chip active">كل الأدوات</Link>
+            {categories.slice(0, 12).map((category) => (
+              <Link key={category.id} to={`/shop?category=${category.id}`} className="chip">
+                {category.emoji} {category.name}
+              </Link>
             ))}
           </div>
         </div>
       </section>
 
-      {featured.length > 0 && (
-        <HScroll title="الأكثر مبيعاً" emoji="🔥" products={featured} />
-      )}
+      {featured.length > 0 ? <HScroll title="أدوات مختارة" emoji="⚡" tools={featured} /> : null}
 
-      {cats.map(c => {
-        const items = all.filter(p => p.category_id === c.id);
+      {categories.map((category) => {
+        const items = toolsByCategory.get(category.id) || [];
         if (!items.length) return null;
-        return <HScroll key={c.id} title={c.name} emoji={c.emoji} products={items} />;
+        return <HScroll key={category.id} title={category.name} emoji={category.emoji} tools={items.slice(0, 12)} />;
       })}
 
       <section className="home-section" id="featured">
         <div className="container">
           <div className="banner-strip">
             <div>
-              <h3>💳 محفظة ذكية</h3>
-              <p>عبّئ محفظتك بأكواد تعبئة فورية، أو عبر تحويل بنكي / عملة رقمية يوافق عليه المدير.</p>
+              <h3>صورة واحدة، باقات متعددة</h3>
+              <p>كل أداة تجمع باقاتها في صفحة واحدة؛ لا تتكرر الهوية البصرية عند اختلاف المدة أو الرصيد.</p>
             </div>
-            <Link to="/login" className="btn btn-light">بدء الشراء</Link>
+            <Link to="/shop" className="btn btn-light">ابدأ الاختيار</Link>
           </div>
         </div>
       </section>
 
       <section className="home-section how-section">
         <div className="container">
-          <h2 className="center-title">كيف تشتري؟</h2>
+          <h2 className="center-title">كيف تختار خدمتك؟</h2>
           <div className="steps">
-            <div className="step"><div className="step-num">1</div><h4>أنشئ حساباً</h4><p>سجّل برقم هاتفك</p></div>
-            <div className="step"><div className="step-num">2</div><h4>عبّئ محفظتك</h4><p>أكواد فورية أو تحويل يدوي</p></div>
-            <div className="step"><div className="step-num">3</div><h4>اطلب المنتج</h4><p>أضف للسلة وأكمل الشراء</p></div>
-            <div className="step"><div className="step-num">4</div><h4>استلم التفعيل</h4><p>معلومات التفعيل في طلبك وواتساب</p></div>
+            <div className="step"><div className="step-num">1</div><h4>اختر الأداة</h4><p>استعرض الأدوات حسب التصنيف</p></div>
+            <div className="step"><div className="step-num">2</div><h4>اختر الباقة</h4><p>حدد المدة أو التجديد أو الرصيد</p></div>
+            <div className="step"><div className="step-num">3</div><h4>أدخل بيانات الخدمة</h4><p>تظهر الحقول المطلوبة لكل باقة</p></div>
+            <div className="step"><div className="step-num">4</div><h4>تابع الطلب</h4><p>تصل التحديثات إلى حسابك</p></div>
           </div>
         </div>
       </section>

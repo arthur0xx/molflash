@@ -45,6 +45,14 @@ CREATE TABLE IF NOT EXISTS products (
   is_active INTEGER NOT NULL DEFAULT 1,
   sold_count INTEGER NOT NULL DEFAULT 0,
   fields TEXT NOT NULL DEFAULT '[]',
+  source_service_id TEXT DEFAULT '',
+  service_type TEXT DEFAULT '',
+  delivery_time TEXT DEFAULT '',
+  tool_key TEXT DEFAULT '',
+  tool_name TEXT DEFAULT '',
+  package_label TEXT DEFAULT '',
+  asset_status TEXT DEFAULT 'default',
+  asset_path TEXT DEFAULT '',
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   FOREIGN KEY (category_id) REFERENCES categories(id)
 );
@@ -118,6 +126,14 @@ function ensureColumn(table, col, ddl) {
   if (!cols.includes(col)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${ddl}`);
 }
 ensureColumn('products', 'fields', "TEXT NOT NULL DEFAULT '[]'");
+ensureColumn('products', 'source_service_id', "TEXT DEFAULT ''");
+ensureColumn('products', 'service_type', "TEXT DEFAULT ''");
+ensureColumn('products', 'delivery_time', "TEXT DEFAULT ''");
+ensureColumn('products', 'tool_key', "TEXT DEFAULT ''");
+ensureColumn('products', 'tool_name', "TEXT DEFAULT ''");
+ensureColumn('products', 'package_label', "TEXT DEFAULT ''");
+ensureColumn('products', 'asset_status', "TEXT DEFAULT 'default'");
+ensureColumn('products', 'asset_path', "TEXT DEFAULT ''");
 ensureColumn('order_items', 'answers', "TEXT NOT NULL DEFAULT '{}'");
 
 export default db;

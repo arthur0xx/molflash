@@ -11,12 +11,12 @@ export default function Navbar() {
     <header className="navbar">
       <div className="container nav-inner">
         <Link to="/" className="brand">
-          <span className="brand-logo">⚡</span>
+          <span className="brand-logo"><img src="/assets/chrigsm-mark.png" alt="" /></span>
           <span className="brand-name"><b>chrigsm</b></span>
         </Link>
         <nav className="nav-links">
           <NavLink to="/" end>الرئيسية</NavLink>
-          <NavLink to="/shop">المتجر</NavLink>
+          <NavLink to="/shop">الأدوات والخدمات</NavLink>
         </nav>
         <div className="nav-actions">
           <Link to="/cart" className="nav-icon-btn" title="السلة">
@@ -28,7 +28,7 @@ export default function Navbar() {
                 🔔 {unread > 0 && <span className="badge">{unread}</span>}
               </button>
               <button className="nav-icon-btn" title="حسابي" onClick={() => navigate('/profile')}>👤</button>
-              <span className="balance-chip" title="رصيد المحفظة">💳 {user.balance} درهم</span>
+              <span className="balance-chip" title="رصيد المحفظة">💳 {user.balance} USD</span>
               {user.role === 'admin' && <Link to="/admin" className="nav-icon-btn" title="لوحة التحكم">⚙️</Link>}
               <button className="nav-icon-btn" title="تسجيل الخروج" onClick={() => { logout(); navigate('/'); }}>🚪</button>
             </>
