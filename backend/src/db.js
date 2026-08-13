@@ -4,10 +4,12 @@ import { fileURLToPath } from 'url';
 import fs from 'fs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = path.join(__dirname, '..', 'data');
+const DEFAULT_DB_PATH = path.join(__dirname, '..', 'data', 'store.db');
+const DATABASE_PATH = process.env.DATABASE_PATH ? path.resolve(process.env.DATABASE_PATH) : DEFAULT_DB_PATH;
+const DATA_DIR = path.dirname(DATABASE_PATH);
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
-const db = new Database(path.join(DATA_DIR, 'store.db'));
+const db = new Database(DATABASE_PATH);
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 
