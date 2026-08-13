@@ -20,6 +20,11 @@
     "react-dom": "19.2.8",
     "zod": "^4.4.3"
   },
+  "overrides": {
+    "jwks-rsa": {
+      "jose": "4.15.9"
+    }
+  },
   "devDependencies": {
     "@types/node": "^20",
     "@types/react": "^19",
