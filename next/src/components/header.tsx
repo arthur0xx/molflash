@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Home, LayoutDashboard, Search, ShoppingBag, UserRound } from "lucide-react";
+import { Grid2X2, Home, LayoutDashboard, ShoppingBag, UserRound } from "lucide-react";
 import { usePathname } from "next/navigation";
 
 const navigation = [
@@ -24,7 +24,6 @@ export function Header() {
       {navigation.map((item) => <Link key={item.href} href={item.href} className={isCurrent(pathname, item.href) ? "nav-current" : ""} aria-current={isCurrent(pathname, item.href) ? "page" : undefined}>{item.label}</Link>)}
     </nav>
     <div className="header-actions">
-      <Link className="icon-button" href="/catalog" aria-label="البحث في الخدمات"><Search size={19} /></Link>
       <Link className={`icon-button ${isCurrent(pathname, "/account") ? "icon-current" : ""}`} href="/account" aria-label="حسابي"><UserRound size={19} /></Link>
       <Link className="icon-button cart-dot" href="/catalog" aria-label="السلة التجريبية"><ShoppingBag size={19} /><span>0</span></Link>
     </div>
@@ -35,7 +34,7 @@ export function BottomNav() {
   const pathname = usePathname();
   const items = [
     { href: "/", label: "الرئيسية", icon: <Home size={18} /> },
-    { href: "/catalog", label: "الخدمات", icon: <Search size={18} /> },
+    { href: "/catalog", label: "الخدمات", icon: <Grid2X2 size={18} /> },
     { href: "/account", label: "حسابي", icon: <UserRound size={18} /> },
     { href: "/admin", label: "CMC", icon: <LayoutDashboard size={18} /> },
   ];
