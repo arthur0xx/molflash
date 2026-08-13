@@ -119,10 +119,33 @@ function bootstrapAdmin() {
   console.log('✅ تم إنشاء حساب المدير من متغيرات البيئة');
 }
 
+function bootstrapDemoAccounts() {
+  const isEnabled = String(process.env.SEED_DEMO_ACCOUNTS || '').toLowerCase() === 'true';
+  if (!isEnabled || process.env.NODE_ENV === 'production') return;
+
+  const accounts = [
+    { name: 'مدير تجريبي ChriGsm', phone: '0600000000', password: 'AdminDemo2026!', role: 'admin', balance: 0 },
+    { name: 'عميل تجريبي ChriGsm', phone: '0611111111', password: 'ClientDemo2026!', role: 'customer', balance: 1500 },
+  ];
+  const createUser = db.prepare('INSERT INTO users (name, phone, password, balance, role) VALUES (?,?,?,?,?)');
+  const addCredit = db.prepare("INSERT INTO wallet_transactions (user_id, amount, type, method, status, description, ref) VALUES (?,?,?,?,?,?,?)");
+
+  for (const account of accounts) {
+    const existing = db.prepare('SELECT id FROM users WHERE phone = ?').get(account.phone);
+    if (existing) continue;
+    const result = createUser.run(account.name, account.phone, bcrypt.hashSync(account.password, 12), account.balance, account.role);
+    if (account.balance > 0) {
+      addCredit.run(result.lastInsertRowid, account.balance, 'credit', 'demo', 'success', 'رصيد تجريبي للعميل', 'DEMO-SEED');
+    }
+  }
+  console.log('✅ تم تجهيز حسابي الإدارة والعميل التجريبيين في بيئة التطوير');
+}
+
 export default function seed() {
   setInitialSettings();
   db.prepare("UPDATE products SET description = REPLACE(description, 'MolFlash', 'chrigsm') WHERE description LIKE '%MolFlash%'").run();
   bootstrapAdmin();
+  bootstrapDemoAccounts();
   const existingImported = db.prepare("SELECT COUNT(*) AS c FROM products WHERE source_service_id != ''").get().c;
   if (existingImported > 0) return;
 
