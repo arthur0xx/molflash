@@ -31,4 +31,5 @@ export function saveBrowserDemoOrder(order: BrowserDemoOrder) { save(DEMO_ORDERS
 export function getBrowserDemoProfile(): BrowserDemoProfile | null { return read<BrowserDemoProfile | null>(DEMO_PROFILE_KEY, null); }
 export function saveBrowserDemoProfile(profile: BrowserDemoProfile) { save(DEMO_PROFILE_KEY, profile, "chrigsm:demo-profile"); }
 export function getBrowserSupportTickets(): BrowserSupportTicket[] { return read<BrowserSupportTicket[]>(DEMO_SUPPORT_KEY, []); }
-export function saveBrowserSupportTicket(ticket: BrowserSupportTicket) { save(DEMO_SUPPORT_KEY, [ticket, ...getBrowserSupportTickets()], "chrigsm:demo-support"); }
+export function saveBrowserSupportTickets(tickets: BrowserSupportTicket[]) { save(DEMO_SUPPORT_KEY, tickets, "chrigsm:demo-support"); }
+export function saveBrowserSupportTicket(ticket: BrowserSupportTicket) { saveBrowserSupportTickets([ticket, ...getBrowserSupportTickets()]); }
