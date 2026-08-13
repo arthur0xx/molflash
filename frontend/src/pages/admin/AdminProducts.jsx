@@ -8,7 +8,7 @@ function CategoryIcon({ category }) {
   return <span className="category-folder-emoji" aria-hidden="true">{category.emoji || '📁'}</span>;
 }
 
-export default function AdminProducts() {
+export default function AdminProducts({ globalSearch = '' }) {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [editing, setEditing] = useState(null);
@@ -31,6 +31,7 @@ export default function AdminProducts() {
   };
 
   useEffect(() => { load(); }, []);
+  useEffect(() => { if (globalSearch.trim()) setQuery(globalSearch); }, [globalSearch]);
 
   const visibleProducts = useMemo(() => products.filter((product) => {
     const matchesQuery = !query.trim() || `${product.name} ${product.package_label || ''} ${product.tool_name || ''}`.toLowerCase().includes(query.trim().toLowerCase());

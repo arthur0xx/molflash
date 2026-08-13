@@ -39,46 +39,74 @@ function AdminLogin() {
   );
 }
 
+const ADMIN_NAV = [
+  ['dashboard', 'نظرة عامة', '⌂'],
+  ['orders', 'الطلبات', '▱'],
+  ['categories', 'التصنيفات', '□'],
+  ['products', 'المنتجات', '◇'],
+  ['tools', 'الأدوات والباقات', '◈'],
+  ['users', 'العملاء', '♙'],
+  ['wallet', 'المحفظة', '◌'],
+  ['vouchers', 'أكواد التعبئة', '⌘'],
+  ['settings', 'الإعدادات', '⚙'],
+];
+
 export default function AdminApp() {
   const { user, loading } = useApp();
   const [tab, setTab] = useState('dashboard');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [globalSearch, setGlobalSearch] = useState('');
+
+  const chooseTab = (nextTab) => { setTab(nextTab); setSidebarOpen(false); };
+  const searchCatalog = (event) => {
+    event.preventDefault();
+    chooseTab('products');
+  };
 
   if (loading) return <div className="container"><p className="muted">...</p></div>;
   if (!user) return <AdminLogin />;
   if (user.role !== 'admin') return <div className="container empty"><p>هذه الصفحة للإدارة فقط</p></div>;
 
   return (
-    <div className="admin-app">
-      <aside className="admin-side">
-        <div className="admin-brand">⚡ <b>التحكم</b></div>
-        <nav>
-          {[
-            ['dashboard', '📊 لوحة المعلومات'],
-            ['tools', '🧰 الأدوات والباقات'],
-            ['products', '📦 الباقات الفردية'],
-            ['categories', '🏷️ التصنيفات'],
-            ['orders', '📋 الطلبات'],
-            ['users', '👥 الزبناء'],
-            ['wallet', '💰 طلبات التعبئة'],
-            ['vouchers', '🎟️ أكواد التعبئة'],
-            ['settings', '⚙️ الإعدادات'],
-          ].map(([k, l]) => (
-            <button key={k} className={`admin-tab ${tab === k ? 'active' : ''}`} onClick={() => setTab(k)}>{l}</button>
-          ))}
-        </nav>
-        <a href="/" className="btn btn-outline btn-sm" target="_self">← العودة للمتجر</a>
-      </aside>
-      <main className="admin-main">
-        {tab === 'dashboard' && <AdminOverview go={setTab} />}
-        {tab === 'tools' && <Tools go={setTab} />}
-        {tab === 'products' && <AdminProducts />}
-        {tab === 'categories' && <AdminCategories />}
-        {tab === 'orders' && <Orders />}
-        {tab === 'users' && <Users />}
-        {tab === 'wallet' && <WalletReq />}
-        {tab === 'vouchers' && <Vouchers />}
-        {tab === 'settings' && <Settings />}
-      </main>
+    <div className="admin-shell" dir="rtl">
+      <header className="admin-topbar">
+        <div className="admin-topbar-brand">
+          <button className="admin-menu-toggle" onClick={() => setSidebarOpen((value) => !value)} aria-label="إظهار القائمة">☰</button>
+          <button className="admin-wordmark" onClick={() => chooseTab('dashboard')}><b>ChriGsm</b> <span>CMC</span></button>
+        </div>
+        <form className="admin-global-search" onSubmit={searchCatalog}>
+          <input value={globalSearch} onChange={(event) => setGlobalSearch(event.target.value)} placeholder="البحث في المنتجات والخدمات…" aria-label="البحث في الكتالوج" />
+          <button type="submit" aria-label="بحث">⌕</button>
+        </form>
+        <div className="admin-topbar-account">
+          <button className="admin-utility" aria-label="المساعدة">?</button>
+          <button className="admin-utility" aria-label="الإشعارات">♧</button>
+          <div className="admin-account-chip"><span className="admin-avatar">{String(user.name || 'A').trim().slice(0, 1)}</span><span>{user.name || 'admin'}</span></div>
+        </div>
+      </header>
+
+      <div className="admin-app">
+        <main className="admin-main">
+          {tab === 'dashboard' && <AdminOverview go={chooseTab} />}
+          {tab === 'tools' && <Tools go={chooseTab} />}
+          {tab === 'products' && <AdminProducts globalSearch={globalSearch} />}
+          {tab === 'categories' && <AdminCategories />}
+          {tab === 'orders' && <Orders />}
+          {tab === 'users' && <Users />}
+          {tab === 'wallet' && <WalletReq />}
+          {tab === 'vouchers' && <Vouchers />}
+          {tab === 'settings' && <Settings />}
+        </main>
+        <aside className={`admin-side ${sidebarOpen ? 'is-open' : ''}`}>
+          <div className="admin-side-label">إدارة المتجر</div>
+          <nav aria-label="تنقل لوحة الإدارة">
+            {ADMIN_NAV.map(([key, label, icon]) => (
+              <button key={key} className={`admin-tab ${tab === key ? 'active' : ''}`} onClick={() => chooseTab(key)}><span className="admin-nav-glyph" aria-hidden="true">{icon}</span>{label}</button>
+            ))}
+          </nav>
+          <a href="/" className="admin-store-link" target="_self">↗ العودة إلى المتجر</a>
+        </aside>
+      </div>
     </div>
   );
 }
@@ -129,7 +157,7 @@ function Tools({ go }) {
     api('/admin/tools').then(setTools).catch((e) => setErr(e.message));
     api('/admin/categories').then(setCats).catch(() => {});
   };
-  useEffect(load, []);
+  useEffect(() => { load(); }, []);
 
   const openTool = async (toolKey) => {
     setErr(''); setMsg('');
@@ -249,7 +277,7 @@ function Products() {
   const [editing, setEditing] = useState(null);
   const [fields, setFields] = useState([]);
   const load = () => { api('/admin/products').then(setList); api('/admin/categories').then(setCats); };
-  useEffect(load, []);
+  useEffect(() => { load(); }, []);
 
   const save = async (e) => {
     e.preventDefault();
@@ -337,7 +365,7 @@ function Categories() {
   const [editing, setEditing] = useState(null);
   const [err, setErr] = useState('');
   const load = () => api('/admin/categories').then(setList);
-  useEffect(load, []);
+  useEffect(() => { load(); }, []);
 
   const save = async (e) => {
     e.preventDefault();
@@ -381,55 +409,38 @@ function Categories() {
 function Orders() {
   const [list, setList] = useState([]);
   const [filter, setFilter] = useState('all');
+  const [sort, setSort] = useState('newest');
   const load = () => api(`/admin/orders?status=${filter}`).then(setList);
-  useEffect(load, [filter]);
+  useEffect(() => { load(); }, [filter]);
 
   const setStatus = async (id, status) => {
     const d = await api(`/admin/orders/${id}/status`, { method: 'PUT', body: { status } });
     load();
-    if (status === 'success' && d.wa_link) {
-      if (confirm('فتح واتساب لإرسال إشعار نجاح الطلب للزبون؟')) waOpen(d.wa_link);
-    }
-    if (status === 'rejected') alert('تم رفض الطلب وإرجاع المبلغ لمحفظة الزبون.');
+    if (status === 'success' && d.wa_link && confirm('فتح واتساب لإرسال إشعار نجاح الطلب للعميل؟')) waOpen(d.wa_link);
+    if (status === 'rejected') alert('تم رفض الطلب وإرجاع المبلغ إلى محفظة العميل.');
   };
 
+  const ordered = [...list].sort((a, b) => {
+    if (sort === 'amount') return Number(b.total || 0) - Number(a.total || 0);
+    return String(b.created_at || '').localeCompare(String(a.created_at || ''));
+  });
+
   return (
-    <div className="admin-panel">
-      <h1>تتبع الطلبات</h1>
-      <div className="filter-row">
-        {['all', 'pending', 'success', 'rejected'].map(f => (
-          <button key={f} className={`btn btn-sm ${filter === f ? 'btn-primary' : 'btn-outline'}`} onClick={() => setFilter(f)}>
-            {f === 'all' ? 'الكل' : STATUS_AR[f]}
-          </button>
-        ))}
+    <div className="admin-panel operational-page orders-page">
+      <div className="admin-heading"><div><div className="eyebrow">مركز العمليات</div><h1>إدارة الطلبات</h1><p className="muted">تابع حالة كل خدمة رقمية، راجع معلومات العميل، ثم أرسل نتيجة المعالجة عند التسليم.</p></div><button className="btn btn-outline btn-sm" onClick={load}>تحديث</button></div>
+      <div className="operational-filterbar admin-surface">
+        <label><span>الحالة</span><select className="input" value={filter} onChange={(event) => setFilter(event.target.value)}><option value="all">كل الطلبات</option><option value="pending">قيد المعالجة</option><option value="success">مكتمل</option><option value="rejected">مرفوض</option></select></label>
+        <label><span>ترتيب الوقت</span><select className="input" value={sort} onChange={(event) => setSort(event.target.value)}><option value="newest">الأحدث أولًا</option><option value="amount">الأعلى سعرًا</option></select></label>
+        <div className="operational-filter-note"><b>{ordered.length}</b><span>طلب معروض</span></div>
       </div>
-      <div className="admin-table">
-        {list.map(o => (
-          <div className="admin-row admin-order" key={o.id}>
-            <div className="row-main">
-              <b>طلب #{o.id} — {o.user_name} ({o.user_phone})</b>
-              <span className="muted small">{o.created_at}</span>
-            </div>
-            <div className="order-items">
-              {o.items && o.items.map(it => (
-                <div key={it.id} className="order-item">
-                  <b>{it.name} ×{it.quantity}</b>
-                  {Object.keys(it.answers || {}).length > 0 && (
-                    <div className="order-answers">{Object.entries(it.answers).map(([k, v]) => <span key={k} className="ans-tag">{k}: <b>{v}</b></span>)}</div>
-                  )}
-                </div>
-              ))}
-            </div>
-            <b>{o.total} د.م.</b>
-            <span className={`status-pill ${o.status}`}>{o.status_text}</span>
-            <div className="status-actions">
-              <button className="btn btn-success btn-sm" disabled={o.status === 'success'} onClick={() => setStatus(o.id, 'success')}>ناجح</button>
-              <button className="btn btn-warning btn-sm" disabled={o.status === 'pending'} onClick={() => setStatus(o.id, 'pending')}>معالجة</button>
-              <button className="btn btn-danger btn-sm" disabled={o.status === 'rejected'} onClick={() => setStatus(o.id, 'rejected')}>رفض</button>
-            </div>
-          </div>
-        ))}
-        {list.length === 0 && <p className="muted">لا توجد طلبات</p>}
+      <div className="order-card-grid">
+        {ordered.map((order) => <article className="operational-card order-card" key={order.id}>
+          <div className="operational-card-head"><div><b>طلب #{order.id}</b><span>{order.user_name || 'عميل'} · {order.user_phone || 'بدون هاتف'}</span></div><span className={`status-pill ${order.status}`}>{STATUS_AR[order.status] || 'قيد المعالجة'}</span></div>
+          <div className="order-service-list">{(order.items || []).map((item) => <div className="order-service-line" key={item.id}><b>{item.name}</b><span>×{item.quantity}</span>{Object.keys(item.answers || {}).length > 0 && <div className="order-answer-summary">{Object.entries(item.answers).slice(0, 2).map(([key, value]) => <small key={key}>{key}: {value}</small>)}</div>}</div>)}</div>
+          <div className="operational-card-meta"><span>{order.created_at}</span><b>{Number(order.total || 0).toLocaleString('fr-MA')} د.م.</b></div>
+          <div className="operational-card-actions"><button className="btn btn-outline btn-sm" onClick={() => waOpen(`https://wa.me/${String(order.user_phone || '').replace(/\D/g, '')}`)}>واتساب</button><button className="btn btn-success btn-sm" disabled={order.status === 'success'} onClick={() => setStatus(order.id, 'success')}>مكتمل</button><button className="btn btn-warning btn-sm" disabled={order.status === 'pending'} onClick={() => setStatus(order.id, 'pending')}>معالجة</button><button className="btn btn-danger btn-sm" disabled={order.status === 'rejected'} onClick={() => setStatus(order.id, 'rejected')}>رفض</button></div>
+        </article>)}
+        {!ordered.length && <div className="empty admin-surface"><p>لا توجد طلبات مطابقة للتصفية الحالية.</p></div>}
       </div>
     </div>
   );
@@ -438,36 +449,34 @@ function Orders() {
 function Users() {
   const [list, setList] = useState([]);
   const [amounts, setAmounts] = useState({});
+  const [sort, setSort] = useState('newest');
   const load = () => api('/admin/users').then(setList);
-  useEffect(load, []);
+  useEffect(() => { load(); }, []);
 
-  const adjust = async (u) => {
-    const amt = Number(amounts[u.id]);
-    if (!amt) return alert('أدخل المبلغ');
-    const desc = amt > 0 ? 'إضافة رصيد من الإدارة' : 'خصم رصيد من الإدارة';
-    await api(`/admin/users/${u.id}/balance`, { method: 'POST', body: { amount: amt, description: desc } });
+  const adjust = async (user) => {
+    const amount = Number(amounts[user.id]);
+    if (!amount) return alert('أدخل المبلغ المراد إضافته أو خصمه.');
+    const description = amount > 0 ? 'إضافة رصيد من الإدارة' : 'خصم رصيد من الإدارة';
+    await api(`/admin/users/${user.id}/balance`, { method: 'POST', body: { amount, description } });
+    setAmounts((previous) => ({ ...previous, [user.id]: '' }));
     load();
   };
 
+  const customers = list.filter((user) => user.role === 'customer').sort((a, b) => sort === 'balance' ? Number(b.balance || 0) - Number(a.balance || 0) : String(b.created_at || '').localeCompare(String(a.created_at || '')));
+
   return (
-    <div className="admin-panel">
-      <h1>حسابات الزبناء</h1>
-      <div className="admin-table">
-        {list.filter(u => u.role === 'customer').map(u => (
-          <div className="admin-row" key={u.id}>
-            <div className="row-main">
-              <b>{u.name} ({u.phone})</b>
-              <span className="muted small">{u.orders_count} طلب · رصيد {u.balance} د.م.</span>
-            </div>
-            <div className="inline-form">
-              <input className="input input-sm" type="number" placeholder="± مبلغ" value={amounts[u.id] || ''} onChange={e => setAmounts({ ...amounts, [u.id]: e.target.value })} />
-              <button className="btn btn-primary btn-sm" onClick={() => adjust(u)}>تعديل الرصيد</button>
-            </div>
-            <button className={`btn btn-sm ${u.is_active ? 'btn-danger' : 'btn-success'}`} onClick={async () => { await api(`/admin/users/${u.id}/toggle`, { method: 'POST' }); load(); }}>
-              {u.is_active ? 'تعطيل' : 'تفعيل'}
-            </button>
-          </div>
-        ))}
+    <div className="admin-panel operational-page clients-page">
+      <div className="admin-heading"><div><div className="eyebrow">ملفات العملاء والمحافظ</div><h1>إدارة العملاء</h1><p className="muted">راجِع الرصيد، الطلبات، ووسيلة التواصل قبل تعديل المحفظة أو حالة الحساب.</p></div><button className="btn btn-outline btn-sm" onClick={load}>تحديث</button></div>
+      <div className="operational-filterbar admin-surface client-filterbar"><label><span>ترتيب العملاء</span><select className="input" value={sort} onChange={(event) => setSort(event.target.value)}><option value="newest">الأحدث أولًا</option><option value="balance">الأعلى رصيدًا</option></select></label><div className="operational-filter-note"><b>{customers.length}</b><span>عميل</span></div></div>
+      <div className="client-card-grid">
+        {customers.map((user) => <article className="operational-card client-card" key={user.id}>
+          <div className="client-card-head"><span className="client-avatar">{String(user.name || 'ع').trim().slice(0, 1)}</span><div><b>{user.name}</b><a href={`https://wa.me/${String(user.phone || '').replace(/\D/g, '')}`} target="_blank" rel="noreferrer">◉ {user.phone || 'بدون هاتف'}</a></div></div>
+          <div className="client-balance"><span>رصيد المحفظة</span><b>{Number(user.balance || 0).toLocaleString('fr-MA')} د.م.</b></div>
+          <div className="client-meta"><span>{user.orders_count || 0} طلب</span><span>{user.is_active ? 'حساب نشط' : 'حساب معطّل'}</span></div>
+          <div className="client-adjust"><input className="input input-sm" type="number" placeholder="± مبلغ د.م." value={amounts[user.id] || ''} onChange={(event) => setAmounts({ ...amounts, [user.id]: event.target.value })} /><button className="btn btn-primary btn-sm" onClick={() => adjust(user)}>تعديل الرصيد</button></div>
+          <div className="operational-card-actions"><a className="btn btn-outline btn-sm" href={`https://wa.me/${String(user.phone || '').replace(/\D/g, '')}`} target="_blank" rel="noreferrer">واتساب</a><button className={`btn btn-sm ${user.is_active ? 'btn-danger' : 'btn-success'}`} onClick={async () => { await api(`/admin/users/${user.id}/toggle`, { method: 'POST' }); load(); }}>{user.is_active ? 'تعطيل' : 'تفعيل'}</button></div>
+        </article>)}
+        {!customers.length && <div className="empty admin-surface"><p>لا يوجد عملاء مسجلون بعد.</p></div>}
       </div>
     </div>
   );
@@ -476,7 +485,7 @@ function Users() {
 function WalletReq() {
   const [list, setList] = useState([]);
   const load = () => api('/admin/wallet/requests').then(setList);
-  useEffect(load, []);
+  useEffect(() => { load(); }, []);
   return (
     <div className="admin-panel">
       <h1>طلبات التعبئة اليدوية</h1>
@@ -504,7 +513,7 @@ function Vouchers() {
   const [count, setCount] = useState(1);
   const [generated, setGenerated] = useState([]);
   const load = () => api('/admin/vouchers').then(setList);
-  useEffect(load, []);
+  useEffect(() => { load(); }, []);
 
   const gen = async () => {
     const d = await api('/admin/vouchers/generate', { method: 'POST', body: { amount, count } });
