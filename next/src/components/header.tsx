@@ -1,34 +1,43 @@
+"use client";
+
 import Link from "next/link";
-import { LayoutDashboard, Search, ShoppingBag, UserRound } from "lucide-react";
+import { Home, LayoutDashboard, Search, ShoppingBag, UserRound } from "lucide-react";
+import { usePathname } from "next/navigation";
+
+const navigation = [
+  { href: "/catalog", label: "الخدمات" },
+  { href: "/account", label: "حسابي" },
+  { href: "/admin", label: "CMC" },
+];
+
+function isCurrent(pathname: string, href: string) {
+  return href === "/" ? pathname === href : pathname.startsWith(href);
+}
 
 export function Header() {
-  return (
-    <header className="site-header">
-      <Link href="/" className="brand" aria-label="ChriGsm الرئيسية">
-        <span className="brand-mark">CG</span>
-        <span>ChriGsm</span>
-      </Link>
-      <nav className="top-nav" aria-label="التنقل الرئيسي">
-        <Link href="/catalog">الخدمات</Link>
-        <Link href="/account">حسابي</Link>
-        <Link href="/admin">CMC</Link>
-      </nav>
-      <div className="header-actions">
-        <button className="icon-button" aria-label="بحث"><Search size={19} /></button>
-        <Link className="icon-button" href="/account" aria-label="حسابي"><UserRound size={19} /></Link>
-        <Link className="icon-button cart-dot" href="/catalog" aria-label="السلة"><ShoppingBag size={19} /><span>0</span></Link>
-      </div>
-    </header>
-  );
+  const pathname = usePathname();
+  return <header className="site-header">
+    <Link href="/" className="brand" aria-label="ChriGsm الرئيسية">
+      <span className="brand-mark" aria-hidden="true">CG</span><span>ChriGsm</span>
+    </Link>
+    <nav className="top-nav" aria-label="التنقل الرئيسي">
+      {navigation.map((item) => <Link key={item.href} href={item.href} className={isCurrent(pathname, item.href) ? "nav-current" : ""} aria-current={isCurrent(pathname, item.href) ? "page" : undefined}>{item.label}</Link>)}
+    </nav>
+    <div className="header-actions">
+      <Link className="icon-button" href="/catalog" aria-label="البحث في الخدمات"><Search size={19} /></Link>
+      <Link className={`icon-button ${isCurrent(pathname, "/account") ? "icon-current" : ""}`} href="/account" aria-label="حسابي"><UserRound size={19} /></Link>
+      <Link className="icon-button cart-dot" href="/catalog" aria-label="السلة التجريبية"><ShoppingBag size={19} /><span>0</span></Link>
+    </div>
+  </header>;
 }
 
 export function BottomNav() {
-  return (
-    <nav className="bottom-nav" aria-label="تنقل الهاتف">
-      <Link href="/"><span>⌂</span>الرئيسية</Link>
-      <Link href="/catalog"><Search size={18} />الخدمات</Link>
-      <Link href="/account"><UserRound size={18} />حسابي</Link>
-      <Link href="/admin"><LayoutDashboard size={18} />CMC</Link>
-    </nav>
-  );
+  const pathname = usePathname();
+  const items = [
+    { href: "/", label: "الرئيسية", icon: <Home size={18} /> },
+    { href: "/catalog", label: "الخدمات", icon: <Search size={18} /> },
+    { href: "/account", label: "حسابي", icon: <UserRound size={18} /> },
+    { href: "/admin", label: "CMC", icon: <LayoutDashboard size={18} /> },
+  ];
+  return <nav className="bottom-nav" aria-label="تنقل الهاتف">{items.map((item) => <Link key={item.href} href={item.href} className={isCurrent(pathname, item.href) ? "nav-current" : ""} aria-current={isCurrent(pathname, item.href) ? "page" : undefined}>{item.icon}<span>{item.label}</span></Link>)}</nav>;
 }
