@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { CheckCircle2, Send } from "lucide-react";
 import type { Service } from "@/lib/types";
-import { saveBrowserDemoOrder } from "@/lib/demo-browser";
+import { getBrowserDemoProfile, saveBrowserDemoOrder } from "@/lib/demo-browser";
+import { getDemoSession } from "@/lib/demo-auth";
 
 export function RequestForm({ service }: { service: Service }) {
   const [submitted, setSubmitted] = useState(false);
@@ -14,7 +15,13 @@ export function RequestForm({ service }: { service: Service }) {
     const form = new FormData(event.currentTarget);
     const answers = Object.fromEntries(form.entries().map(([key, value]) => [key, String(value)]));
     const id = `ORD-DEMO-${String(Date.now()).slice(-6)}`;
-    saveBrowserDemoOrder({ id, serviceId: service.id, serviceTitle: service.title, totalMad: service.priceMad, status: "new", createdAt: new Date().toISOString(), answers });
+    const now = new Date().toISOString();
+    const session = getDemoSession();
+    const profile = getBrowserDemoProfile();
+    const customerName = profile?.fullName || session?.fullName || "ياسين الفاسي";
+    const customerPhone = profile?.phone || session?.phone || "+212 600-111222";
+    const customerEmail = profile?.email || session?.email || "yassine.demo@chrigsm.test";
+    saveBrowserDemoOrder({ id, customerId: "cus-yassine", customerName, customerPhone, customerEmail, serviceId: service.id, serviceTitle: service.title, totalMad: service.priceMad, status: "new", createdAt: now, updatedAt: now, answers, statusHistory: [{ status: "new", at: now, note: "أرسل العميل الطلب والبيانات المطلوبة" }] });
     setOrderId(id); setSubmitted(true);
   }
 

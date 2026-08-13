@@ -44,6 +44,19 @@ export interface Customer {
   whatsappEnabled: boolean;
 }
 
+export interface OrderStatusEvent {
+  status: OrderStatus;
+  at: string;
+  note: string;
+}
+
+export interface OrderNotification {
+  title: string;
+  body: string;
+  createdAt: string;
+  read: boolean;
+}
+
 export interface Order {
   id: string;
   customerId: string;
@@ -53,7 +66,10 @@ export interface Order {
   createdAt: string;
   updatedAt: string;
   deliveryCode?: string;
+  deliveryNote?: string;
   formData: Record<string, string>;
+  statusHistory?: OrderStatusEvent[];
+  notification?: OrderNotification;
 }
 
 export interface WalletEntry {
