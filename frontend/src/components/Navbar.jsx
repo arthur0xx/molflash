@@ -1,5 +1,6 @@
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useApp } from '../context.jsx';
+import { CartIcon } from './CartIcons.jsx';
 
 const logoPath = `${import.meta.env.BASE_URL}assets/chrigsm-logo.jpg`;
 
@@ -31,7 +32,7 @@ export default function Navbar() {
             ♧{unread > 0 ? <span className="notification-dot" /> : null}
           </button>
           <Link className="circle-action cart-action" to="/cart" aria-label="سلة المشتريات">
-            ▢{cartCount > 0 ? <span className="cart-count">{cartCount}</span> : null}
+            <CartIcon size={19} />{cartCount > 0 ? <span className="cart-count">{cartCount}</span> : null}
           </Link>
           {user ? (
             <button type="button" className="login-action" onClick={() => navigate('/profile')}>حسابي</button>

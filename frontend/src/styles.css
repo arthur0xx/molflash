@@ -752,3 +752,8 @@ body { background: var(--app-canvas); color: var(--app-ink); font-family: 'Cairo
   .cart-price-block .quantity-control { gap: 4px; padding: 4px; }
   .cart-price-block .quantity-control button { width: 21px; height: 21px; }
 }
+
+
+/* Reliable SVG cart icons across mobile browsers */
+.circle-action > svg { display: block; color: currentColor; }
+.bottom-nav-item > span svg { display: block; width: 21px; height: 21px; }
