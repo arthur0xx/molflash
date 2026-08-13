@@ -1,0 +1,25 @@
+# المكتشفات والمراجع
+
+## قرارات تقنية مثبتة
+
+- مشروع Vercel `chrigsm` مربوط بمستودع `arthur0xx/molflash` مع `frontend` كمجلد جذر وفرع `main` كإنتاج.
+- رابط الإنتاج الحالي على Vercel يعمل، لكنه يستضيف واجهة فقط؛ لا يقدّم قاعدة بيانات أو مصادقة حية.
+- الموقع الحالي React/Vite مع Express/SQLite محلي، وتوجد واجهات CMC أولية وتصميم مرجعي موثق.
+
+## مصادر البنية
+
+| المصدر | الخلاصة | الرابط |
+|---|---|---|
+| Firestore listeners | `onSnapshot` يرسل لقطة أولية ثم تحديثات عند تغيير المستندات أو الاستعلامات | https://firebase.google.com/docs/firestore/query-data/listen |
+| Firebase pricing | Firebase يقدم طبقة بدء دون تكلفة وخدمات منفصلة للهوية والبيانات والملفات مع حدود استخدام | https://firebase.google.com/pricing |
+| MongoDB Atlas | M0 مجاني دائم بسعة 512MB، لكنه قاعدة بيانات لا تكفي وحدها للمصادقة والملفات والتحديث الفوري | https://www.mongodb.com/pricing |
+| NocoDB self-hosting | الاستضافة الذاتية تحتاج 2vCPU/2GB RAM على الأقل؛ لا تناسب هدف الاستضافة المجانية الدائمة كقلب النظام | https://nocodb.com/docs/self-hosting |
+| Next.js Route Handlers | تدعم مسارات HTTP وعمليات خادمية قريبة من الواجهة | https://nextjs.org/docs/app/getting-started/route-handlers |
+| Vite + Vercel | يتيح Vercel معاينات للفروع وإنتاجًا من فرع الإنتاج | https://vite.dev/guide/static-deploy |
+| NestJS | خادم TypeScript منظم وقابل للتوسع، لكن يضيف خادمًا مستقلًا لا نحتاجه في النسخة الأولى | https://docs.nestjs.com/ |
+
+## افتراضات تنفيذية
+
+- لا توجد بيانات إنتاج حية تحتاج ترحيلًا الآن؛ البيانات الحالية تجريبية.
+- المستخدم يريد تقليل الأسئلة، لذلك تستخدم قرارات هذا الملف كافتراضات افتراضية حتى يغيّرها صراحة.
+- لا تنشأ حسابات دفع أو WhatsApp ولا تُرسل رسائل حقيقية أثناء البناء التجريبي.
