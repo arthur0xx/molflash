@@ -100,6 +100,16 @@ export function AdminConsole({ initial }: { initial: DemoSnapshot }) {
     return result;
   }
 
+  async function uploadFileWithTimeout(input: RequestInfo | URL, init: RequestInit, label: string) {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 20_000);
+    try { return await fetch(input, { ...init, signal: controller.signal }); }
+    catch (error) {
+      if (controller.signal.aborted) throw new Error(`انتهت مهلة ${label}. تحقق من الاتصال ثم أعد المحاولة.`);
+      throw error;
+    } finally { window.clearTimeout(timeout); }
+  }
+
   async function uploadServiceImage(file: File) {
     if (!mediaStatus?.configured) throw new Error("تهيئة Cloudinary الخادمية غير مكتملة.");
     if (serviceForm.title.trim().length < 2) throw new Error("اكتب اسم الخدمة أولًا قبل رفع الصورة.");
@@ -118,7 +128,7 @@ export function AdminConsole({ initial }: { initial: DemoSnapshot }) {
       formData.append("public_id", signed.publicId);
       formData.append("overwrite", String(signed.overwrite));
       formData.append("invalidate", String(signed.invalidate));
-      const response = await fetch(`https://api.cloudinary.com/v1_1/${signed.cloudName}/image/upload`, { method: "POST", body: formData });
+      const response = await uploadFileWithTimeout(`https://api.cloudinary.com/v1_1/${signed.cloudName}/image/upload`, { method: "POST", body: formData }, "رفع صورة الخدمة");
       const result = await response.json().catch(() => ({})) as { secure_url?: string; public_id?: string; error?: { message?: string } };
       if (!response.ok || !result.secure_url?.startsWith("https://") || !result.public_id?.startsWith("chrigsm/services/")) throw new Error(result.error?.message || "تعذر رفع الصورة إلى Cloudinary.");
       setServiceForm((previous) => ({ ...previous, imageUrl: result.secure_url || "", imagePublicId: result.public_id || "" }));

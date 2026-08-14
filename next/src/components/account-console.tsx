@@ -125,6 +125,16 @@ export function AccountConsole() {
     setProfileDraft((previous) => ({ ...previous, ...result.profile }));
   }
 
+  async function uploadFileWithTimeout(input: RequestInfo | URL, init: RequestInit, label: string) {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 20_000);
+    try { return await fetch(input, { ...init, signal: controller.signal }); }
+    catch (error) {
+      if (controller.signal.aborted) throw new Error(`انتهت مهلة ${label}. تحقق من الاتصال ثم أعد المحاولة.`);
+      throw error;
+    } finally { window.clearTimeout(timeout); }
+  }
+
   async function uploadProfileImage(file: File) {
     if (!profileMediaStatus?.configured) { setProfileError("رفع الصور غير متاح لأن تهيئة الخادم غير مكتملة."); return; }
     if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) { setProfileError("اختر صورة PNG أو JPEG أو WebP."); return; }
@@ -139,7 +149,7 @@ export function AccountConsole() {
       if (!signatureResponse.ok || !signed.cloudName || !signed.apiKey || !signed.folder || !signed.publicId || !signed.timestamp || !signed.signature) throw new Error(signed.error || "تعذر تجهيز رفع صورة الحساب.");
       const formData = new FormData();
       formData.append("file", file); formData.append("api_key", signed.apiKey); formData.append("timestamp", String(signed.timestamp)); formData.append("signature", signed.signature); formData.append("folder", signed.folder); formData.append("public_id", signed.publicId); formData.append("overwrite", String(signed.overwrite)); formData.append("invalidate", String(signed.invalidate));
-      const uploadResponse = await fetch(`https://api.cloudinary.com/v1_1/${signed.cloudName}/image/upload`, { method: "POST", body: formData });
+      const uploadResponse = await uploadFileWithTimeout(`https://api.cloudinary.com/v1_1/${signed.cloudName}/image/upload`, { method: "POST", body: formData }, "رفع صورة الحساب");
       const uploaded = await uploadResponse.json().catch(() => ({})) as { secure_url?: string; public_id?: string; error?: { message?: string } };
       if (!uploadResponse.ok || !uploaded.secure_url?.startsWith("https://") || !uploaded.public_id?.startsWith("chrigsm/profiles/")) throw new Error(uploaded.error?.message || "تعذر رفع صورة الحساب.");
       await saveProfileAvatar(uploaded.secure_url, uploaded.public_id);
