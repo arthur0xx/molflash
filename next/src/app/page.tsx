@@ -15,7 +15,7 @@ export default async function Home() {
   return <><Header /><main className="store-shell home-shell">
     <section className="home-status" aria-label="حالة المتجر">
       <div><p className="eyebrow">ChriGsm</p><h1>الخدمات الرقمية</h1></div>
-      <span className="live-pill"><span /> وضع تجريبي</span>
+      <span className="live-pill"><span /> متجر متصل</span>
     </section>
 
     <Link href="/catalog" className="search-box home-search"><Search size={20} /><span>ابحث عن خدمة، أداة أو تفعيل...</span><kbd>بحث</kbd></Link>
@@ -44,7 +44,7 @@ export default async function Home() {
 
     <section className="support-card">
       <div className="support-icon"><MessageCircle size={23} /></div>
-      <div><h3>تحتاج مساعدة قبل الطلب؟</h3><p>ستجد الطلبات ومراحل المعالجة في حسابك. سيُضاف ربط WhatsApp Business عند تشغيل الحساب الحقيقي.</p></div>
+      <div><h3>تحتاج مساعدة قبل الطلب؟</h3><p>ستجد الطلبات ومراحل المعالجة في حسابك. سيُضاف ربط WhatsApp Business عند تفعيل التكامل.</p></div>
       <Link href="/account" className="support-link"><CircleHelp size={18} /> الدعم</Link>
     </section>
   </main><BottomNav /></>;
