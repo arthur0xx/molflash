@@ -1,5 +1,4 @@
-import { getIdTokenResult, onAuthStateChanged, signInWithEmailAndPassword, signOut, type User } from "firebase/auth";
-import { firebaseServices } from "@/lib/firebase/client";
+import type { User } from "firebase/auth";
 import type { Role } from "@/lib/types";
 
 const DEMO_SESSION_KEY = "chrigsm:demo-session";
@@ -24,6 +23,7 @@ function persist(session: DemoSession | null) {
 }
 
 async function firebaseSession(user: User): Promise<DemoSession> {
+  const { getIdTokenResult } = await import("firebase/auth");
   const claims = await getIdTokenResult(user, true);
   return {
     uid: user.uid,
@@ -37,15 +37,24 @@ async function firebaseSession(user: User): Promise<DemoSession> {
 
 function startFirebaseObserver() {
   if (!browserReady() || observerStarted) return;
-  const services = firebaseServices();
-  if (!services) return;
   observerStarted = true;
-  onAuthStateChanged(services.auth, async (user) => {
-    try { persist(user ? await firebaseSession(user) : null); }
-    catch { persist(null); }
-  });
+  void (async () => {
+    const [{ onAuthStateChanged }, { firebaseServices }] = await Promise.all([
+      import("firebase/auth"),
+      import("@/lib/firebase/client"),
+    ]);
+    const services = firebaseServices();
+    if (!services) return;
+    onAuthStateChanged(services.auth, (user) => {
+      void (async () => {
+        try { persist(user ? await firebaseSession(user) : null); }
+        catch { persist(null); }
+      })();
+    });
+  })();
 }
 
+/** Reads the small local session immediately; Firebase observation starts after the shell is interactive. */
 export function getDemoSession(): DemoSession | null {
   if (!browserReady()) return null;
   startFirebaseObserver();
@@ -58,8 +67,12 @@ function normalizedEmail(identifier: string) {
   return demoCredentials.find((account) => account.phone === compact)?.email || compact.toLowerCase();
 }
 
-/** Uses Firebase Auth whenever public Firebase configuration exists; local credentials remain only as a no-config fallback. */
+/** Uses Firebase Auth only when the user signs in; local credentials remain the no-config fallback. */
 export async function signInDemo(identifier: string, password: string): Promise<DemoSession | null> {
+  const [{ signInWithEmailAndPassword }, { firebaseServices }] = await Promise.all([
+    import("firebase/auth"),
+    import("@/lib/firebase/client"),
+  ]);
   const services = firebaseServices();
   if (services) {
     try {
@@ -83,8 +96,14 @@ export async function signInDemo(identifier: string, password: string): Promise<
 
 export function signOutDemo() {
   persist(null);
-  const services = firebaseServices();
-  if (services) void signOut(services.auth).catch(() => undefined);
+  void (async () => {
+    const [{ signOut }, { firebaseServices }] = await Promise.all([
+      import("firebase/auth"),
+      import("@/lib/firebase/client"),
+    ]);
+    const services = firebaseServices();
+    if (services) await signOut(services.auth).catch(() => undefined);
+  })();
 }
 
 export const demoLoginHints = {
