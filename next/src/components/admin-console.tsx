@@ -80,7 +80,10 @@ export function AdminConsole({ initial }: { initial: DemoSnapshot }) {
     ...browserOrders.map((order) => ({ id: order.id, customerId: order.customerId, serviceId: order.serviceId, status: order.status, totalMad: order.totalMad, createdAt: order.createdAt, updatedAt: order.updatedAt, deliveryCode: order.deliveryCode, deliveryNote: order.deliveryNote, formData: order.answers, statusHistory: order.statusHistory, notification: order.notification, browserOrder: order })),
     ...data.orders,
   ], [browserOrders, data.orders, firebase]);
-  const totalWallet = useMemo(() => data.customers.reduce((sum, item) => sum + item.walletMad, 0), [data.customers]);
+  const totalWallet = useMemo(() => data.customers.reduce((sum, item) => {
+    const balance = typeof item.walletMad === "number" && Number.isFinite(item.walletMad) ? item.walletMad : 0;
+    return sum + balance;
+  }, 0), [data.customers]);
   const processing = allOrders.filter((item) => item.status === "processing").length;
   const activeCategory = data.categories.find((item) => item.id === openFolder);
   const visibleOrders = selectedCustomerId ? allOrders.filter((order) => order.customerId === selectedCustomerId) : allOrders;
