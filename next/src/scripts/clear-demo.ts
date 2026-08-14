@@ -15,6 +15,10 @@ const deleteDemoAuthUsers = process.argv.includes("--delete-demo-auth");
 
 const demoAuthUids = ["admin-demo", "cus-yassine"];
 const demoCustomerIds = ["cus-yassine", "cus-fatima", "cus-omar"];
+const protectedOwner = {
+  uid: "h32apgdkHIeGsO3vaHYFOruLmaw2",
+  email: "afficheurma.lcd@gmail.com",
+};
 const fixtureIds: Record<string, string[]> = {
   categories: ["tool-activation", "server-services", "tool-rental", "misc"],
   services: ["svc-frp-samsung", "svc-honor-frp", "svc-tsl", "svc-eft", "svc-alltool", "svc-chatgpt", "svc-gaming"],
@@ -75,6 +79,14 @@ async function demoAuthenticationUsers(): Promise<AuthManifest> {
   return users;
 }
 
+function assertOwnerProtected(candidates: CandidateReferences, authenticationUsers: AuthManifest) {
+  const ownerDocumentIsTargeted = candidates.get("customers")?.has(protectedOwner.uid);
+  const ownerAuthenticationIsTargeted = authenticationUsers.some((user) => user.uid === protectedOwner.uid || user.email === protectedOwner.email);
+  if (ownerDocumentIsTargeted || ownerAuthenticationIsTargeted) {
+    throw new Error("Safety stop: the owner account or profile is included in the cleanup targets.");
+  }
+}
+
 async function removeCandidates(candidates: CandidateReferences) {
   if (dryRun) return;
   for (const entries of candidates.values()) {
@@ -99,6 +111,7 @@ async function main() {
   await collectCustomerLinkedDocuments(candidates);
   const authenticationUsers = await demoAuthenticationUsers();
   const documents = Object.fromEntries(Array.from(candidates.entries()).map(([collection, entries]) => [collection, Array.from(entries.keys()).sort()]));
+  assertOwnerProtected(candidates, authenticationUsers);
 
   await removeCandidates(candidates);
   await removeDemoAuth(authenticationUsers);
@@ -109,6 +122,7 @@ async function main() {
     documents,
     authenticationUsers,
     authenticationDeletionRequested: deleteDemoAuthUsers,
+    protectedOwner: { uid: protectedOwner.uid, email: protectedOwner.email },
     note: dryRun
       ? "No data was deleted. Review this manifest before executing cleanup."
       : deleteDemoAuthUsers
