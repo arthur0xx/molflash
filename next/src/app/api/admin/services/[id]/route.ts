@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { adminDb } from "@/lib/firebase/admin";
 import { requireAdmin } from "@/lib/api/admin-auth";
+import { deleteCloudinaryImage } from "@/lib/cloudinary";
 
 const dynamicFieldSchema = z.object({
   id: z.string().trim().regex(/^[a-z0-9-]{2,50}$/i, "معرف الحقل غير صحيح"),
@@ -11,23 +12,25 @@ const dynamicFieldSchema = z.object({
   placeholder: z.string().trim().max(160, "النص المساعد طويل جدًا").optional(),
   options: z.array(z.string().trim().min(1).max(120)).max(50).optional(),
 }).superRefine((field, context) => {
-  if (field.type === "select" && (!field.options || field.options.length === 0)) {
-    context.addIssue({ code: "custom", message: "حقل الاختيار يحتاج خيارات" });
-  }
-  if (field.type !== "select" && field.options?.length) {
-    context.addIssue({ code: "custom", message: "الخيارات مسموحة لحقل الاختيار فقط" });
-  }
+  if (field.type === "select" && (!field.options || field.options.length === 0)) context.addIssue({ code: "custom", message: "حقل الاختيار يحتاج خيارات" });
+  if (field.type !== "select" && field.options?.length) context.addIssue({ code: "custom", message: "الخيارات مسموحة لحقل الاختيار فقط" });
 });
+
+const managedImageUrl = z.string().trim().url("رابط الصورة غير صحيح").refine((value) => {
+  try { return new URL(value).protocol === "https:" && new URL(value).hostname === "res.cloudinary.com"; } catch { return false; }
+}, "الصورة يجب أن تأتي من Cloudinary المهيأ").max(2000, "رابط الصورة طويل جدًا");
+const managedImagePublicId = z.string().trim().regex(/^chrigsm\/services\/[a-z0-9_-]{3,180}$/i, "معرف صورة الخدمة غير صحيح").max(220);
 
 const updateServiceSchema = z.object({
   slug: z.string().trim().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/i, "رابط الخدمة غير صحيح").min(2).max(100).optional(),
-  title: z.string().trim().min(2, "اسم الخدمة قصير جدًا").max(160, "اسم الخدمة طويل جدًا").optional(),
+  title: z.string().trim().min(2, "اسم الخدمة قصير جدًا").max(160).optional(),
   categoryId: z.string().trim().min(1, "اختر تصنيفًا صالحًا").max(128).optional(),
   description: z.string().trim().min(4, "وصف الخدمة قصير جدًا").max(2000, "وصف الخدمة طويل جدًا").optional(),
   priceMad: z.number().finite().min(0, "السعر لا يمكن أن يكون سالبًا").max(1000000, "السعر أكبر من الحد المسموح").optional(),
   delivery: z.string().trim().min(2, "مدة أو نوع التسليم مطلوب").max(200, "معلومة التسليم طويلة جدًا").optional(),
   badge: z.string().trim().max(80, "الشارة طويلة جدًا").nullable().optional(),
-  imageUrl: z.string().trim().url("رابط الصورة غير صحيح").refine((value) => value.startsWith("https://"), "رابط الصورة يجب أن يستخدم HTTPS").max(2000, "رابط الصورة طويل جدًا").nullable().optional(),
+  imageUrl: managedImageUrl.nullable().optional(),
+  imagePublicId: managedImagePublicId.nullable().optional(),
   isActive: z.boolean().optional(),
   fields: z.array(dynamicFieldSchema).max(20, "عدد الحقول كبير جدًا").optional(),
 }).refine((body) => Object.keys(body).length > 0, "لا توجد بيانات للتعديل").superRefine((service, context) => {
@@ -35,7 +38,13 @@ const updateServiceSchema = z.object({
     const ids = service.fields.map((field) => field.id);
     if (new Set(ids).size !== ids.length) context.addIssue({ code: "custom", message: "معرفات الحقول يجب أن تكون فريدة" });
   }
+  const imageSupplied = Object.prototype.hasOwnProperty.call(service, "imageUrl") || Object.prototype.hasOwnProperty.call(service, "imagePublicId");
+  if (imageSupplied && Boolean(service.imageUrl) !== Boolean(service.imagePublicId)) context.addIssue({ code: "custom", message: "الصورة المرفوعة تحتاج رابطًا ومعرفًا صالحين من Cloudinary" });
 });
+
+function cleanupServiceAsset(publicId: string) {
+  void deleteCloudinaryImage(publicId, "service").catch((error) => console.error("Failed to delete replaced service image", error));
+}
 
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const admin = await requireAdmin(request);
@@ -55,6 +64,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     const reference = db.collection("services").doc(serviceId);
     const service = await reference.get();
     if (!service.exists) return NextResponse.json({ error: "الخدمة غير موجودة" }, { status: 404 });
+    const current = service.data() as Record<string, unknown>;
 
     if (parsed.data.categoryId) {
       const category = await db.collection("categories").doc(parsed.data.categoryId).get();
@@ -62,19 +72,24 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       if (!category.data()?.isActive) return NextResponse.json({ error: "لا يمكن نقل الخدمة إلى تصنيف غير نشط" }, { status: 400 });
     }
 
-    if (parsed.data.slug && parsed.data.slug !== service.data()?.slug) {
+    if (parsed.data.slug && parsed.data.slug !== current.slug) {
       const duplicate = await db.collection("services").where("slug", "==", parsed.data.slug).limit(1).get();
       if (!duplicate.empty) return NextResponse.json({ error: "رابط الخدمة مستخدم بالفعل" }, { status: 409 });
     }
 
     const now = new Date().toISOString();
-    const update = { ...parsed.data, updatedAt: now, updatedBy: admin.uid };
+    const update: Record<string, unknown> = { ...parsed.data, updatedAt: now, updatedBy: admin.uid };
     if (parsed.data.badge === null) update.badge = "";
     if (parsed.data.imageUrl === null) update.imageUrl = "";
+    if (parsed.data.imagePublicId === null) update.imagePublicId = "";
     await reference.update(update);
     await db.collection("auditLogs").add({ action: "service_updated", serviceId, fields: Object.keys(parsed.data), actorUid: admin.uid, at: now });
 
-    return NextResponse.json({ service: { id: serviceId, ...service.data(), ...update } });
+    const previousPublicId = typeof current.imagePublicId === "string" ? current.imagePublicId : "";
+    const nextPublicId = typeof update.imagePublicId === "string" ? update.imagePublicId : previousPublicId;
+    if (previousPublicId && previousPublicId !== nextPublicId) cleanupServiceAsset(previousPublicId);
+
+    return NextResponse.json({ service: { id: serviceId, ...current, ...update } });
   } catch (error) {
     console.error("Failed to update service", error);
     return NextResponse.json({ error: "تعذر تعديل الخدمة" }, { status: 500 });
@@ -99,13 +114,13 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
       db.collection("orders").where("serviceId", "==", serviceId).limit(1).get(),
     ]);
     if (!service.exists) return NextResponse.json({ error: "الخدمة غير موجودة" }, { status: 404 });
-    if (!linkedOrders.empty) {
-      return NextResponse.json({ error: "لا يمكن حذف خدمة مرتبطة بطلبات. عطّلها بدلًا من حذفها." }, { status: 409 });
-    }
+    if (!linkedOrders.empty) return NextResponse.json({ error: "لا يمكن حذف خدمة مرتبطة بطلبات. عطّلها بدلًا من حذفها." }, { status: 409 });
 
+    const current = service.data() as Record<string, unknown>;
     const now = new Date().toISOString();
     await reference.delete();
     await db.collection("auditLogs").add({ action: "service_deleted", serviceId, actorUid: admin.uid, at: now });
+    if (typeof current.imagePublicId === "string" && current.imagePublicId) cleanupServiceAsset(current.imagePublicId);
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error("Failed to delete service", error);

@@ -10,11 +10,13 @@ import { formatMAD, statusLabels, type CustomerProfile, type OrderNotification, 
 import { firebaseServices } from "@/lib/firebase/client";
 import { type BrowserDemoOrder } from "@/lib/demo-browser";
 import { signOutDemo } from "@/lib/demo-auth";
+import { MediaImageControl } from "@/components/media-image-control";
 
 const orderTone = (status: BrowserDemoOrder["status"]) => ({ new: "blue", processing: "amber", waiting: "violet", completed: "green", rejected: "red" }[status]);
 const fieldLabels: Record<string, string> = { email: "البريد الإلكتروني", imei: "IMEI", model: "موديل الجهاز", serial: "Serial Number", username: "اسم المستخدم", plan: "الباقة", duration: "مدة الكراء", game: "اللعبة", playerId: "Player ID" };
 type CustomerAccount = CustomerProfile & { id: string; walletMad: number };
 type AccountState = "loading" | "signed-out" | "ready" | "error";
+type MediaStatus = { configured: boolean; cloudName?: string };
 
 function asString(value: unknown, fallback = "") { return typeof value === "string" ? value : fallback; }
 function asNumber(value: unknown, fallback = 0) { return typeof value === "number" ? value : fallback; }
@@ -44,6 +46,8 @@ export function AccountConsole() {
   const [profileSaved, setProfileSaved] = useState(false);
   const [profileError, setProfileError] = useState("");
   const [profileSaving, setProfileSaving] = useState(false);
+  const [profileImageUploading, setProfileImageUploading] = useState(false);
+  const [profileMediaStatus, setProfileMediaStatus] = useState<MediaStatus | null>(null);
   const [ticketSaved, setTicketSaved] = useState(false);
   const [supportError, setSupportError] = useState("");
   const [supportSaving, setSupportSaving] = useState(false);
@@ -57,7 +61,7 @@ export function AccountConsole() {
         const customerSnapshot = await getDoc(doc(firebase.db, "customers", user.uid));
         if (!customerSnapshot.exists()) throw new Error("لم يُعثر على ملف العميل لهذا الحساب.");
         const rawCustomer = customerSnapshot.data() as Record<string, unknown>;
-        const profile: CustomerAccount = { id: user.uid, fullName: asString(rawCustomer.fullName, user.displayName || "عميل ChriGsm"), phone: asString(rawCustomer.phone, user.phoneNumber || ""), email: asString(rawCustomer.email, user.email || ""), walletMad: asNumber(rawCustomer.walletMad) };
+        const profile: CustomerAccount = { id: user.uid, fullName: asString(rawCustomer.fullName, user.displayName || "عميل ChriGsm"), phone: asString(rawCustomer.phone, user.phoneNumber || ""), email: asString(rawCustomer.email, user.email || ""), avatarUrl: asString(rawCustomer.avatarUrl) || undefined, avatarPublicId: asString(rawCustomer.avatarPublicId) || undefined, walletMad: asNumber(rawCustomer.walletMad) };
         const orderSnapshot = await getDocs(query(collection(firebase.db, "orders"), where("customerId", "==", user.uid)));
         const loadedOrders = await Promise.all(orderSnapshot.docs.map(async (orderDoc) => {
           const raw = orderDoc.data() as Record<string, unknown>;
@@ -72,6 +76,18 @@ export function AccountConsole() {
         if (!supportResponse.ok) throw new Error(supportResult.error || "تعذر تحميل رسائل الدعم.");
         setCustomer(profile); setProfileDraft(profile); setOrders(loadedOrders); setTickets(supportResult.tickets || []); setAccountState("ready"); setError("");
       } catch (reason) { setAccountState("error"); setError(reason instanceof Error ? reason.message : "تعذر تحميل بيانات الحساب."); }
+    });
+  }, [firebase]);
+
+  useEffect(() => {
+    if (!firebase) { setProfileMediaStatus({ configured: false }); return; }
+    return onAuthStateChanged(firebase.auth, async (user) => {
+      if (!user) { setProfileMediaStatus(null); return; }
+      try {
+        const response = await fetch("/api/account/media/signature", { headers: { Authorization: `Bearer ${await user.getIdToken()}` } });
+        const result = await response.json().catch(() => ({})) as MediaStatus;
+        setProfileMediaStatus(response.ok ? result : { configured: false });
+      } catch { setProfileMediaStatus({ configured: false }); }
     });
   }, [firebase]);
 
@@ -95,6 +111,52 @@ export function AccountConsole() {
     } catch (reason) { setProfileError(reason instanceof Error ? reason.message : "تعذر حفظ إعدادات الحساب."); }
     finally { setProfileSaving(false); }
   }
+  async function saveProfileAvatar(avatarUrl: string | null, avatarPublicId: string | null) {
+    const user = firebase?.auth.currentUser;
+    if (!user) throw new Error("يتطلب تغيير الصورة تسجيل الدخول عبر Firebase.");
+    const response = await fetch("/api/account/profile", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${await user.getIdToken()}` },
+      body: JSON.stringify({ avatarUrl, avatarPublicId }),
+    });
+    const result = await response.json().catch(() => ({})) as { profile?: CustomerProfile; error?: string };
+    if (!response.ok || !result.profile) throw new Error(result.error || "تعذر حفظ صورة الحساب.");
+    setCustomer((previous) => previous ? { ...previous, ...result.profile } : previous);
+    setProfileDraft((previous) => ({ ...previous, ...result.profile }));
+  }
+
+  async function uploadProfileImage(file: File) {
+    if (!profileMediaStatus?.configured) { setProfileError("رفع الصور غير متاح لأن تهيئة الخادم غير مكتملة."); return; }
+    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) { setProfileError("اختر صورة PNG أو JPEG أو WebP."); return; }
+    if (file.size > 10 * 1024 * 1024) { setProfileError("حجم الصورة يتجاوز الحد المسموح 10 ميغابايت."); return; }
+    const user = firebase?.auth.currentUser;
+    if (!user) { setProfileError("يتطلب تغيير الصورة تسجيل الدخول عبر Firebase."); return; }
+
+    try {
+      setProfileImageUploading(true); setProfileError(""); setProfileSaved(false);
+      const signatureResponse = await fetch("/api/account/media/signature", { method: "POST", headers: { Authorization: `Bearer ${await user.getIdToken()}` } });
+      const signed = await signatureResponse.json().catch(() => ({})) as { cloudName?: string; apiKey?: string; folder?: string; publicId?: string; timestamp?: number; signature?: string; overwrite?: boolean; invalidate?: boolean; error?: string };
+      if (!signatureResponse.ok || !signed.cloudName || !signed.apiKey || !signed.folder || !signed.publicId || !signed.timestamp || !signed.signature) throw new Error(signed.error || "تعذر تجهيز رفع صورة الحساب.");
+      const formData = new FormData();
+      formData.append("file", file); formData.append("api_key", signed.apiKey); formData.append("timestamp", String(signed.timestamp)); formData.append("signature", signed.signature); formData.append("folder", signed.folder); formData.append("public_id", signed.publicId); formData.append("overwrite", String(signed.overwrite)); formData.append("invalidate", String(signed.invalidate));
+      const uploadResponse = await fetch(`https://api.cloudinary.com/v1_1/${signed.cloudName}/image/upload`, { method: "POST", body: formData });
+      const uploaded = await uploadResponse.json().catch(() => ({})) as { secure_url?: string; public_id?: string; error?: { message?: string } };
+      if (!uploadResponse.ok || !uploaded.secure_url?.startsWith("https://") || !uploaded.public_id?.startsWith("chrigsm/profiles/")) throw new Error(uploaded.error?.message || "تعذر رفع صورة الحساب.");
+      await saveProfileAvatar(uploaded.secure_url, uploaded.public_id);
+      setProfileSaved(true);
+    } catch (reason) { setProfileError(reason instanceof Error ? reason.message : "تعذر تغيير صورة الحساب."); }
+    finally { setProfileImageUploading(false); }
+  }
+
+  async function removeProfileImage() {
+    try {
+      setProfileImageUploading(true); setProfileError(""); setProfileSaved(false);
+      await saveProfileAvatar(null, null);
+      setProfileSaved(true);
+    } catch (reason) { setProfileError(reason instanceof Error ? reason.message : "تعذر إزالة صورة الحساب."); }
+    finally { setProfileImageUploading(false); }
+  }
+
   async function submitSupport(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const user = firebase?.auth.currentUser;
@@ -117,7 +179,7 @@ export function AccountConsole() {
   if (accountState === "error" || !customer) return <main className="store-shell account-shell"><section className="account-panel"><p className="eyebrow">تعذر فتح الحساب</p><h1>لا يمكن تحميل البيانات المصرح بها</h1><p className="panel-intro">{error}</p><Link className="primary-button" href="/login?next=/account">العودة لتسجيل الدخول</Link></section></main>;
 
   return <main className="store-shell account-shell">
-    <section className="account-hero"><div><p className="eyebrow">منطقة العميل</p><h1>مرحبًا، {customer.fullName}</h1><p>{customer.email}</p><span className="account-demo-note">حساب Firebase متصل</span></div><div className="wallet-hero"><WalletCards size={22}/><span>رصيد المحفظة</span><strong>{formatMAD(customer.walletMad)}</strong></div></section>
+    <section className="account-hero"><div className="account-identity"><MediaImageControl imageUrl={customer.avatarUrl} alt={`صورة ${customer.fullName}`} fallbackLabel={customer.fullName} kind="profile" disabled={!profileMediaStatus?.configured} uploading={profileImageUploading} onSelect={(file) => { void uploadProfileImage(file); }} onRemove={() => { void removeProfileImage(); }}/><div><p className="eyebrow">منطقة العميل</p><h1>مرحبًا، {customer.fullName}</h1><p>{customer.email}</p><span className="account-demo-note">حساب Firebase متصل</span></div></div><div className="wallet-hero"><WalletCards size={22}/><span>رصيد المحفظة</span><strong>{formatMAD(customer.walletMad)}</strong></div></section>
     {deliveryNotifications.length > 0 && <section className="order-notification"><BellRing size={21}/><div><p>آخر إشعار تسليم</p><b>{deliveryNotifications[0].notification?.title}</b><span>{deliveryNotifications[0].notification?.body}</span></div><span className="status-pill green">تم التسليم</span></section>}
     <section className="account-actions" aria-label="إجراءات الحساب"><button type="button" className={showSettings ? "active" : ""} onClick={() => { setShowSettings(!showSettings); setShowSupport(false); }}><Settings2 size={18}/><span>إعدادات الحساب</span><ChevronDown size={15}/></button><button type="button" className={showSupport ? "active" : ""} onClick={() => { setShowSupport(!showSupport); setShowSettings(false); }}><MessageCircle size={18}/><span>الدعم الفني</span><ChevronDown size={15}/></button><button type="button" className="account-logout" onClick={signOut}><LogOut size={18}/><span>تسجيل الخروج</span></button></section>
     {showSettings && <section className="account-panel"><div className="panel-heading"><div><p className="eyebrow">بيانات العميل</p><h2>إعدادات الحساب</h2></div><UserRound size={22}/></div><form className="settings-form" onSubmit={submitProfile}><label><span>الاسم الكامل</span><input value={profileDraft.fullName} onChange={(event) => setProfileDraft({ ...profileDraft, fullName: event.target.value })} required disabled={profileSaving}/></label><label><span>رقم الهاتف</span><input type="tel" value={profileDraft.phone} onChange={(event) => setProfileDraft({ ...profileDraft, phone: event.target.value })} required disabled={profileSaving}/></label><label><span>البريد الإلكتروني المرتبط بالدخول</span><input type="email" value={profileDraft.email} readOnly disabled/></label><div className="settings-password"><KeyRound size={18}/><div><b>كلمة المرور</b><p>تُدار كلمة المرور عبر Firebase Authentication. إعادة التعيين عبر هذا الموقع غير متاحة حاليًا، لذلك لا يظهر أي زر إجراء غير متصل.</p></div></div><div className="form-actions"><button className="primary-button" type="submit" disabled={profileSaving}>{profileSaving ? "جارٍ الحفظ..." : "حفظ التغييرات"}</button>{profileSaved && <span className="saved-inline"><CheckCircle2 size={16}/> حُفظت إعدادات الحساب في Firebase</span>}{profileError && <span className="form-error">{profileError}</span>}</div></form></section>}

@@ -30,6 +30,7 @@ export interface Service {
   delivery: string;
   badge?: string;
   imageUrl?: string;
+  imagePublicId?: string;
   isActive: boolean;
   fields: DynamicField[];
 }
@@ -43,12 +44,16 @@ export interface Customer {
   ordersCount: number;
   lastActivity: string;
   whatsappEnabled: boolean;
+  avatarUrl?: string;
+  avatarPublicId?: string;
 }
 
 export interface CustomerProfile {
   fullName: string;
   phone: string;
   email: string;
+  avatarUrl?: string;
+  avatarPublicId?: string;
 }
 
 export interface OrderStatusEvent {

@@ -11,30 +11,31 @@ const dynamicFieldSchema = z.object({
   placeholder: z.string().trim().max(160, "النص المساعد طويل جدًا").optional(),
   options: z.array(z.string().trim().min(1).max(120)).max(50).optional(),
 }).superRefine((field, context) => {
-  if (field.type === "select" && (!field.options || field.options.length === 0)) {
-    context.addIssue({ code: "custom", message: "حقل الاختيار يحتاج خيارات" });
-  }
-  if (field.type !== "select" && field.options?.length) {
-    context.addIssue({ code: "custom", message: "الخيارات مسموحة لحقل الاختيار فقط" });
-  }
+  if (field.type === "select" && (!field.options || field.options.length === 0)) context.addIssue({ code: "custom", message: "حقل الاختيار يحتاج خيارات" });
+  if (field.type !== "select" && field.options?.length) context.addIssue({ code: "custom", message: "الخيارات مسموحة لحقل الاختيار فقط" });
 });
+
+const managedImageUrl = z.string().trim().url("رابط الصورة غير صحيح").refine((value) => {
+  try { return new URL(value).protocol === "https:" && new URL(value).hostname === "res.cloudinary.com"; } catch { return false; }
+}, "الصورة يجب أن تأتي من Cloudinary المهيأ").max(2000, "رابط الصورة طويل جدًا");
+const managedImagePublicId = z.string().trim().regex(/^chrigsm\/services\/[a-z0-9_-]{3,180}$/i, "معرف صورة الخدمة غير صحيح").max(220);
 
 const serviceSchema = z.object({
   slug: z.string().trim().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/i, "رابط الخدمة غير صحيح").min(2).max(100),
-  title: z.string().trim().min(2, "اسم الخدمة قصير جدًا").max(160, "اسم الخدمة طويل جدًا"),
+  title: z.string().trim().min(2, "اسم الخدمة قصير جدًا").max(160),
   categoryId: z.string().trim().min(1, "اختر تصنيفًا صالحًا").max(128),
   description: z.string().trim().min(4, "وصف الخدمة قصير جدًا").max(2000, "وصف الخدمة طويل جدًا"),
   priceMad: z.number().finite().min(0, "السعر لا يمكن أن يكون سالبًا").max(1000000, "السعر أكبر من الحد المسموح"),
   delivery: z.string().trim().min(2, "مدة أو نوع التسليم مطلوب").max(200, "معلومة التسليم طويلة جدًا"),
   badge: z.string().trim().max(80, "الشارة طويلة جدًا").optional(),
-  imageUrl: z.string().trim().url("رابط الصورة غير صحيح").refine((value) => value.startsWith("https://"), "رابط الصورة يجب أن يستخدم HTTPS").max(2000, "رابط الصورة طويل جدًا").optional(),
+  imageUrl: managedImageUrl.optional(),
+  imagePublicId: managedImagePublicId.optional(),
   isActive: z.boolean().default(false),
   fields: z.array(dynamicFieldSchema).max(20, "عدد الحقول كبير جدًا").default([]),
 }).superRefine((service, context) => {
   const ids = service.fields.map((field) => field.id);
-  if (new Set(ids).size !== ids.length) {
-    context.addIssue({ code: "custom", message: "معرفات الحقول يجب أن تكون فريدة" });
-  }
+  if (new Set(ids).size !== ids.length) context.addIssue({ code: "custom", message: "معرفات الحقول يجب أن تكون فريدة" });
+  if (Boolean(service.imageUrl) !== Boolean(service.imagePublicId)) context.addIssue({ code: "custom", message: "الصورة المرفوعة تحتاج رابطًا ومعرفًا صالحين من Cloudinary" });
 });
 
 export async function POST(request: NextRequest) {
@@ -46,9 +47,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const parsed = serviceSchema.safeParse(await request.json());
-    if (!parsed.success) {
-      return NextResponse.json({ error: parsed.error.issues[0]?.message || "بيانات الخدمة غير صحيحة" }, { status: 400 });
-    }
+    if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message || "بيانات الخدمة غير صحيحة" }, { status: 400 });
 
     const [category, existingSlug] = await Promise.all([
       db.collection("categories").doc(parsed.data.categoryId).get(),
