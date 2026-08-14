@@ -76,7 +76,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       }
 
       transaction.update(orderReference, update);
-      transaction.create(auditReference, { action: deliveryCode ? "order_delivered" : "order_status_updated", orderId: id, customerId: orderSnapshot.data()?.customerId || null, actorUid: admin.uid, at: now, demo: true });
+      transaction.create(auditReference, { action: deliveryCode ? "order_delivered" : "order_status_updated", orderId: id, customerId: orderSnapshot.data()?.customerId || null, actorUid: admin.uid, at: now });
       nextStatus = requestedStatus;
     });
 

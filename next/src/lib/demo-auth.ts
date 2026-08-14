@@ -7,6 +7,7 @@ let observerStarted = false;
 
 export type DemoSession = { uid: string; role: Role; fullName: string; phone: string; email: string; signedInAt: string };
 export type PasswordResetResult = "sent" | "invalid-email" | "unavailable";
+export type RegistrationResult = "created" | "email-in-use" | "weak-password" | "invalid-email" | "unavailable";
 
 type FirebaseUserLike = {
   uid: string;
@@ -30,7 +31,7 @@ function validEmail(value: string) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(va
 
 async function authModules() {
   const [
-    { getIdTokenResult, onAuthStateChanged, sendPasswordResetEmail, signInWithEmailAndPassword, signOut },
+    { createUserWithEmailAndPassword, getIdTokenResult, onAuthStateChanged, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, updateProfile },
     { doc, getDoc },
     { firebaseServices },
   ] = await Promise.all([
@@ -38,7 +39,7 @@ async function authModules() {
     import("firebase/firestore"),
     import("@/lib/firebase/client"),
   ]);
-  return { getIdTokenResult, onAuthStateChanged, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, doc, getDoc, firebaseServices };
+  return { createUserWithEmailAndPassword, getIdTokenResult, onAuthStateChanged, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, updateProfile, doc, getDoc, firebaseServices };
 }
 
 async function firebaseSession(user: FirebaseUserLike): Promise<DemoSession> {
@@ -104,6 +105,41 @@ export async function signInDemo(email: string, password: string): Promise<DemoS
     return session;
   } catch {
     return null;
+  }
+}
+
+export async function registerCustomer(fullName: string, phone: string, email: string, password: string): Promise<RegistrationResult> {
+  const normalized = normalizedEmail(email);
+  const name = fullName.trim();
+  if (!validEmail(normalized)) return "invalid-email";
+  if (name.length < 2 || password.length < 8) return "weak-password";
+
+  const { createUserWithEmailAndPassword, firebaseServices, signOut, updateProfile } = await authModules();
+  const services = firebaseServices();
+  if (!services) return "unavailable";
+
+  try {
+    const credential = await createUserWithEmailAndPassword(services.auth, normalized, password);
+    await updateProfile(credential.user, { displayName: name });
+    const token = await credential.user.getIdToken();
+    const response = await fetch("/api/auth/register", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+      body: JSON.stringify({ fullName: name, phone: phone.trim() }),
+    });
+    if (!response.ok) {
+      await signOut(services.auth).catch(() => undefined);
+      return "unavailable";
+    }
+
+    persist(await firebaseSession(credential.user));
+    return "created";
+  } catch (reason) {
+    const code = typeof reason === "object" && reason && "code" in reason ? String(reason.code) : "";
+    if (code === "auth/email-already-in-use") return "email-in-use";
+    if (code === "auth/weak-password") return "weak-password";
+    if (code === "auth/invalid-email") return "invalid-email";
+    return "unavailable";
   }
 }
 

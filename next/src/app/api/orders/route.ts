@@ -65,9 +65,8 @@ export async function POST(request: NextRequest) {
       updatedAt: now,
       formData,
       statusHistory: [{ status: "new", at: now, note: "تم إنشاء الطلب" }],
-      demo: true,
     });
-    batch.create(auditReference, { action: "order_created", orderId: orderReference.id, customerId: user.uid, actorUid: user.uid, at: now, demo: true });
+    batch.create(auditReference, { action: "order_created", orderId: orderReference.id, customerId: user.uid, actorUid: user.uid, at: now });
     await batch.commit();
 
     return NextResponse.json({ ok: true, id: orderReference.id }, { status: 201 });
