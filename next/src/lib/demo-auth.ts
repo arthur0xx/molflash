@@ -1,30 +1,36 @@
-import type { User } from "firebase/auth";
 import type { Role } from "@/lib/types";
 
-const DEMO_SESSION_KEY = "chrigsm:demo-session";
-const SESSION_EVENT = "chrigsm:demo-session";
+const SESSION_KEY = "chrigsm:session";
+const SESSION_EVENT = "chrigsm:session";
+const PASSWORD_RESET_CONTINUE_PATH = "/login?reset=sent";
 let observerStarted = false;
 
 export type DemoSession = { uid: string; role: Role; fullName: string; phone: string; email: string; signedInAt: string };
-type DemoCredential = DemoSession & { password: string };
-
-const demoCredentials: DemoCredential[] = [
-  { uid: "admin-demo", role: "admin", fullName: "مدير ChriGsm", phone: "0600000000", email: "admin@chrigsm.test", password: "AdminDemo2026!", signedInAt: "" },
-  { uid: "cus-yassine", role: "customer", fullName: "ياسين الفاسي", phone: "0611111111", email: "yassine.demo@chrigsm.test", password: "ClientDemo2026!", signedInAt: "" },
-];
+export type PasswordResetResult = "sent" | "invalid-email" | "unavailable";
 
 function browserReady() { return typeof window !== "undefined"; }
 function emit() { if (browserReady()) window.dispatchEvent(new Event(SESSION_EVENT)); }
 function persist(session: DemoSession | null) {
   if (!browserReady()) return;
-  if (session) window.localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify(session));
-  else window.localStorage.removeItem(DEMO_SESSION_KEY);
+  if (session) window.localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  else window.localStorage.removeItem(SESSION_KEY);
   emit();
 }
 
-async function firebaseSession(user: User): Promise<DemoSession> {
-  const { getIdTokenResult } = await import("firebase/auth");
-  const claims = await getIdTokenResult(user, true);
+export function normalizedEmail(value: string) { return value.trim().toLowerCase(); }
+function validEmail(value: string) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value); }
+
+async function authModules() {
+  const [{ getIdTokenResult, onAuthStateChanged, sendPasswordResetEmail, signInWithEmailAndPassword, signOut }, { firebaseServices }] = await Promise.all([
+    import("firebase/auth"),
+    import("@/lib/firebase/client"),
+  ]);
+  return { getIdTokenResult, onAuthStateChanged, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, firebaseServices };
+}
+
+async function firebaseSession(user: { uid: string; displayName: string | null; phoneNumber: string | null; email: string | null; getIdToken: (forceRefresh?: boolean) => Promise<string> }): Promise<DemoSession> {
+  const { getIdTokenResult } = await authModules();
+  const claims = await getIdTokenResult(user as never, true);
   return {
     uid: user.uid,
     role: claims.claims.role === "admin" ? "admin" : "customer",
@@ -39,74 +45,67 @@ function startFirebaseObserver() {
   if (!browserReady() || observerStarted) return;
   observerStarted = true;
   void (async () => {
-    const [{ onAuthStateChanged }, { firebaseServices }] = await Promise.all([
-      import("firebase/auth"),
-      import("@/lib/firebase/client"),
-    ]);
+    const { firebaseServices, onAuthStateChanged } = await authModules();
     const services = firebaseServices();
-    if (!services) return;
-    onAuthStateChanged(services.auth, (user) => {
-      void (async () => {
-        try { persist(user ? await firebaseSession(user) : null); }
-        catch { persist(null); }
-      })();
+    if (!services) { persist(null); return; }
+    onAuthStateChanged(services.auth, async (user) => {
+      try { persist(user ? await firebaseSession(user) : null); }
+      catch { persist(null); }
     });
   })();
 }
 
-/** Reads the small local session immediately; Firebase observation starts after the shell is interactive. */
 export function getDemoSession(): DemoSession | null {
   if (!browserReady()) return null;
   startFirebaseObserver();
-  try { const stored = window.localStorage.getItem(DEMO_SESSION_KEY); return stored ? JSON.parse(stored) as DemoSession : null; }
+  try { const stored = window.localStorage.getItem(SESSION_KEY); return stored ? JSON.parse(stored) as DemoSession : null; }
   catch { return null; }
 }
 
-function normalizedEmail(identifier: string) {
-  const compact = identifier.replace(/\s/g, "");
-  return demoCredentials.find((account) => account.phone === compact)?.email || compact.toLowerCase();
+export async function signInDemo(email: string, password: string): Promise<DemoSession | null> {
+  const { firebaseServices, signInWithEmailAndPassword } = await authModules();
+  const services = firebaseServices();
+  if (!services) return null;
+  try {
+    const credential = await signInWithEmailAndPassword(services.auth, normalizedEmail(email), password);
+    const session = await firebaseSession(credential.user);
+    persist(session);
+    return session;
+  } catch {
+    return null;
+  }
 }
 
-/** Uses Firebase Auth only when the user signs in; local credentials remain the no-config fallback. */
-export async function signInDemo(identifier: string, password: string): Promise<DemoSession | null> {
-  const [{ signInWithEmailAndPassword }, { firebaseServices }] = await Promise.all([
-    import("firebase/auth"),
-    import("@/lib/firebase/client"),
-  ]);
-  const services = firebaseServices();
-  if (services) {
-    try {
-      const credential = await signInWithEmailAndPassword(services.auth, normalizedEmail(identifier), password);
-      const session = await firebaseSession(credential.user);
-      persist(session);
-      return session;
-    } catch {
-      return null;
-    }
-  }
+export async function requestPasswordReset(email: string): Promise<PasswordResetResult> {
+  const normalized = normalizedEmail(email);
+  if (!validEmail(normalized)) return "invalid-email";
 
-  const normalized = identifier.replace(/\s/g, "").toLowerCase();
-  const match = demoCredentials.find((account) => (account.phone === identifier.replace(/\s/g, "") || account.email.toLowerCase() === normalized) && account.password === password);
-  if (!match || !browserReady()) return null;
-  const { password: _password, ...base } = match;
-  const session: DemoSession = { ...base, signedInAt: new Date().toISOString() };
-  persist(session);
-  return session;
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+  if (!appUrl || !/^https:\/\/[^/?#]+$/i.test(appUrl)) return "unavailable";
+
+  const { firebaseServices, sendPasswordResetEmail } = await authModules();
+  const services = firebaseServices();
+  if (!services) return "unavailable";
+
+  try {
+    services.auth.languageCode = "ar";
+    await sendPasswordResetEmail(services.auth, normalized, {
+      url: `${appUrl}${PASSWORD_RESET_CONTINUE_PATH}`,
+      handleCodeInApp: false,
+    });
+    return "sent";
+  } catch (reason) {
+    const code = typeof reason === "object" && reason && "code" in reason ? String(reason.code) : "";
+    if (code === "auth/user-not-found" || code === "auth/invalid-credential") return "sent";
+    return "unavailable";
+  }
 }
 
 export function signOutDemo() {
   persist(null);
   void (async () => {
-    const [{ signOut }, { firebaseServices }] = await Promise.all([
-      import("firebase/auth"),
-      import("@/lib/firebase/client"),
-    ]);
+    const { firebaseServices, signOut } = await authModules();
     const services = firebaseServices();
     if (services) await signOut(services.auth).catch(() => undefined);
   })();
 }
-
-export const demoLoginHints = {
-  admin: { phone: "0600000000", password: "AdminDemo2026!" },
-  customer: { phone: "0611111111", password: "ClientDemo2026!" },
-};
