@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { onAuthStateChanged } from "firebase/auth";
 import { Boxes, CreditCard, FolderTree, MessageCircle, Pencil, Plus, Send, Settings2, Trash2, UsersRound } from "lucide-react";
-import type { Category, DemoSnapshot, Order, OrderStatus, Service } from "@/lib/types";
+import type { Category, DemoSnapshot, Order, OrderStatus, Service, SupportTicket } from "@/lib/types";
 import { formatMAD, statusLabels } from "@/lib/types";
 import { firebaseServices } from "@/lib/firebase/client";
-import { getBrowserDemoOrders, getBrowserSupportTickets, saveBrowserSupportTickets, updateBrowserDemoOrder, type BrowserDemoOrder, type BrowserSupportTicket } from "@/lib/demo-browser";
+import { getBrowserDemoOrders, updateBrowserDemoOrder, type BrowserDemoOrder } from "@/lib/demo-browser";
 import { AdminSessionControls } from "@/components/admin-session-controls";
 
 const statusOptions: OrderStatus[] = ["new", "processing", "waiting", "completed", "rejected"];
@@ -27,8 +28,8 @@ export function AdminConsole({ initial }: { initial: DemoSnapshot }) {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [typedName, setTypedName] = useState("");
   const firebase = firebaseServices();
-  const [notice, setNotice] = useState(firebase ? "Firebase متصل: الطلبات والتصنيفات والخدمات والأرصدة تُحفظ عبر المسارات الخادمية." : "وضع تجريبي: لا يمكن تعديل التصنيفات أو الخدمات أو الأرصدة قبل اتصال Firebase.");
-  const [tickets, setTickets] = useState<BrowserSupportTicket[]>([]);
+  const [notice, setNotice] = useState(firebase ? "Firebase متصل: الطلبات والتصنيفات والخدمات والأرصدة والدعم تُحفظ عبر المسارات الخادمية." : "وضع تجريبي: لا يمكن تعديل التصنيفات أو الخدمات أو الأرصدة أو الدعم قبل اتصال Firebase.");
+  const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [browserOrders, setBrowserOrders] = useState<BrowserDemoOrder[]>([]);
   const [deliveryDrafts, setDeliveryDrafts] = useState<Record<string, string>>({});
   const [deliveryNotes, setDeliveryNotes] = useState<Record<string, string>>({});
@@ -39,14 +40,24 @@ export function AdminConsole({ initial }: { initial: DemoSnapshot }) {
   const [isSaving, setIsSaving] = useState(false);
   const [walletReasons, setWalletReasons] = useState<Record<string, string>>({});
   const [walletSavingId, setWalletSavingId] = useState<string | null>(null);
+  const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
+  const [supportSavingId, setSupportSavingId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (firebase) return;
-    const refresh = () => { setTickets(getBrowserSupportTickets()); setBrowserOrders(getBrowserDemoOrders()); };
-    refresh();
-    window.addEventListener("chrigsm:demo-support", refresh);
-    window.addEventListener("chrigsm:demo-order", refresh);
-    return () => { window.removeEventListener("chrigsm:demo-support", refresh); window.removeEventListener("chrigsm:demo-order", refresh); };
+    if (!firebase) {
+      const refreshOrders = () => setBrowserOrders(getBrowserDemoOrders());
+      refreshOrders(); window.addEventListener("chrigsm:demo-order", refreshOrders);
+      return () => window.removeEventListener("chrigsm:demo-order", refreshOrders);
+    }
+    return onAuthStateChanged(firebase.auth, async (user) => {
+      if (!user) { setTickets([]); return; }
+      try {
+        const response = await fetch("/api/admin/support", { headers: { Authorization: `Bearer ${await user.getIdToken()}` } });
+        const result = await response.json().catch(() => ({})) as { tickets?: SupportTicket[]; error?: string };
+        if (!response.ok) throw new Error(result.error || "تعذر تحميل رسائل الدعم.");
+        setTickets(result.tickets || []);
+      } catch (reason) { setNotice(reason instanceof Error ? reason.message : "تعذر تحميل رسائل الدعم."); }
+    });
   }, [firebase]);
 
   const allOrders = useMemo<DisplayOrder[]>(() => firebase ? data.orders : [
@@ -111,7 +122,19 @@ export function AdminConsole({ initial }: { initial: DemoSnapshot }) {
     } catch (reason) { setNotice(reason instanceof Error ? reason.message : "تعذر تسليم الطلب."); }
   }
 
-  function answerTicket(ticketId: string) { const next = tickets.map((ticket) => ticket.id === ticketId ? { ...ticket, status: "answered" as const } : ticket); setTickets(next); saveBrowserSupportTickets(next); setNotice(`تم وضع رسالة الدعم ${ticketId} كـ«تم الرد».`); }
+  async function answerTicket(ticketId: string) {
+    const reply = replyDrafts[ticketId]?.trim();
+    if (!firebase) { setNotice("يتطلب الرد على الدعم اتصال Firebase وحساب مدير."); return; }
+    if (!reply || reply.length < 4) { setNotice("اكتب ردًا واضحًا من 4 أحرف على الأقل قبل الحفظ."); return; }
+    try {
+      setSupportSavingId(ticketId);
+      const result = await adminRequest<{ ticket: SupportTicket }>(`/api/admin/support/${ticketId}`, "PATCH", { reply });
+      setTickets((previous) => previous.map((ticket) => ticket.id === ticketId ? result.ticket : ticket));
+      setReplyDrafts((previous) => ({ ...previous, [ticketId]: "" }));
+      setNotice("حُفظ رد الدعم خادميًا وسيظهر للعميل في حسابه.");
+    } catch (reason) { setNotice(reason instanceof Error ? reason.message : "تعذر حفظ رد الدعم."); }
+    finally { setSupportSavingId(null); }
+  }
 
   async function adjustWallet(customerId: string, amountMad: number) {
     const reason = walletReasons[customerId]?.trim();
@@ -232,7 +255,7 @@ export function AdminConsole({ initial }: { initial: DemoSnapshot }) {
     {tab === "products" && <section className="cmc-card"><div className="section-title"><div><p className="eyebrow">خدمات محفوظة خادميًا</p><h2>{activeCategory ? activeCategory.name : "مجلدات المنتجات"}</h2></div>{activeCategory && <button className="filter-button" onClick={() => setOpenFolder(null)}>رجوع للمجلدات</button>}</div>{!activeCategory ? <div className="folder-grid">{data.categories.map((category) => <article className="folder-card" key={category.id} style={{ "--folder-color": category.color } as CSSProperties}><button className="folder-open" onClick={() => setOpenFolder(category.id)}><span className="folder-icon">{category.icon.slice(0, 1)}</span><span><b>{category.name}</b><small>{data.services.filter((item) => item.categoryId === category.id).length} خدمات</small></span></button></article>)}</div> : <div className="product-list">{data.services.filter((item) => item.categoryId === activeCategory.id).map((service) => <article className="product-row" key={service.id}><span className="service-glyph">{service.title.slice(0, 2)}</span><div><h3>{service.title}</h3><p>{service.description}</p></div><strong>{formatMAD(service.priceMad)}</strong><div className="row-actions"><button className="filter-button" onClick={() => openServiceEditor(undefined, service)}><Pencil size={14}/> تعديل</button><button className="danger-button" onClick={() => deleteService(service)} disabled={isSaving}><Trash2 size={14}/> حذف</button></div></article>)}<button className="primary-button" onClick={() => openServiceEditor(activeCategory.id)} disabled={!firebase || isSaving}><Plus size={16}/> إضافة خدمة</button></div>}</section>}
     {tab === "categories" && <section className="cmc-card"><div className="section-title"><div><p className="eyebrow">إضافة وتعديل وحذف خادمي</p><h2>التصنيفات والأيقونات</h2></div><button className="primary-button small" onClick={() => openCategoryEditor()} disabled={!firebase || isSaving}><Plus size={15}/> إضافة تصنيف</button></div><div className="category-admin-list">{data.categories.map((category) => <article key={category.id} className="category-admin-row"><span className="folder-icon" style={{ "--folder-color": category.color } as CSSProperties}>{category.icon.slice(0, 1)}</span><div><h3>{category.name}</h3><p>{category.description || "من دون وصف"} · أيقونة: {category.icon}</p></div><span className="muted-text">{data.services.filter((item) => item.categoryId === category.id).length} خدمات</span><div className="row-actions"><button className="filter-button" onClick={() => openCategoryEditor(category)} disabled={!firebase || isSaving}><Pencil size={14}/> تعديل</button><button className="danger-button" onClick={() => setDeleteId(category.id)} disabled={!firebase || isSaving}><Trash2 size={15}/> حذف</button></div></article>)}</div></section>}
     {tab === "customers" && <section className="cmc-card"><div className="section-title"><div><p className="eyebrow">محافظ وسجل تدقيق</p><h2>العملاء</h2></div><span className="muted-text">كل تعديل يتطلب سببًا ويُسجل خادميًا</span></div><div className="customer-grid">{data.customers.map((customer) => <article className="customer-card large" key={customer.id}><span className="avatar">{customer.fullName.slice(0, 1)}</span><div><h3>{customer.fullName}</h3><p>{customer.phone}</p><strong>رصيد {formatMAD(customer.walletMad)} · {allOrders.filter((order) => order.customerId === customer.id).length} طلبات</strong></div><div className="wallet-actions"><input aria-label={`سبب تعديل رصيد ${customer.fullName}`} value={walletReasons[customer.id] || ""} onChange={(event) => setWalletReasons((previous) => ({ ...previous, [customer.id]: event.target.value }))} placeholder="سبب التعديل (مطلوب)" disabled={!firebase || walletSavingId === customer.id}/><div><button onClick={() => adjustWallet(customer.id, 50)} disabled={!firebase || walletSavingId === customer.id}>+50</button><button onClick={() => adjustWallet(customer.id, -50)} disabled={!firebase || walletSavingId === customer.id}>-50</button><button onClick={() => { setSelectedCustomerId(customer.id); setTab("orders"); }} disabled={walletSavingId === customer.id}>طلبات</button></div></div></article>)}</div></section>}
-    {tab === "support" && <section className="cmc-card"><div className="section-title"><div><p className="eyebrow">منطقة العميل</p><h2>رسائل الدعم</h2></div><span className="muted-text">{tickets.length} رسائل تجريبية</span></div>{tickets.length ? <div className="admin-ticket-list">{tickets.map((ticket) => <article key={ticket.id}><MessageCircle size={20}/><div><b>{ticket.subject}</b><p>{ticket.message}</p><small>{ticket.id} · {ticket.createdAt.slice(0, 10)}</small></div><div><span className={`status-pill ${ticket.status === "open" ? "amber" : "green"}`}>{ticket.status === "open" ? "مفتوح" : "تم الرد"}</span>{ticket.status === "open" && <button className="filter-button" onClick={() => answerTicket(ticket.id)}><Send size={14}/> تم الرد</button>}</div></article>)}</div> : <div className="empty-state"><MessageCircle size={24}/><h2>لا توجد رسائل دعم</h2><p>ستظهر رسائل العملاء هنا عند إرسالها من حساب التجربة أو بعد ربط Firebase.</p></div>}</section>}
+    {tab === "support" && <section className="cmc-card"><div className="section-title"><div><p className="eyebrow">رسائل العملاء المحفوظة</p><h2>الدعم</h2></div><span className="muted-text">{firebase ? `${tickets.length} رسائل في Firebase` : "الدعم يحتاج Firebase"}</span></div>{tickets.length ? <div className="admin-ticket-list">{tickets.map((ticket) => { const ticketCustomer = data.customers.find((customer) => customer.id === ticket.customerId); return <article key={ticket.id}><MessageCircle size={20}/><div><b>{ticket.subject}</b><p>{ticket.message}</p><small>{ticketCustomer?.fullName || ticket.customerId} · {ticket.createdAt.slice(0, 10)}</small>{ticket.reply && <div className="ticket-reply"><b>رد CMC</b><p>{ticket.reply.message}</p></div>}</div><div><span className={`status-pill ${ticket.status === "open" ? "amber" : "green"}`}>{ticket.status === "open" ? "مفتوح" : "تم الرد"}</span>{ticket.status === "open" && <div className="support-reply-draft"><textarea value={replyDrafts[ticket.id] || ""} onChange={(event) => setReplyDrafts((previous) => ({ ...previous, [ticket.id]: event.target.value }))} placeholder="اكتب ردًا يظهر للعميل" disabled={!firebase || supportSavingId === ticket.id}/><button className="filter-button" onClick={() => answerTicket(ticket.id)} disabled={!firebase || supportSavingId === ticket.id}><Send size={14}/> {supportSavingId === ticket.id ? "جارٍ الحفظ..." : "إرسال الرد"}</button></div>}</div></article>; })}</div> : <div className="empty-state"><MessageCircle size={24}/><h2>لا توجد رسائل دعم محفوظة</h2><p>{firebase ? "ستظهر رسائل العملاء هنا فور إرسالها من حساباتهم." : "اربط Firebase لإتاحة رسائل الدعم الحقيقية."}</p></div>}</section>}
     {tab === "settings" && <section className="cmc-card"><div className="section-title"><div><p className="eyebrow">إعداد محلي قبل الإنتاج</p><h2>إعدادات المتجر والإدارة</h2></div><Settings2 size={22}/></div><AdminSessionControls/><div className="admin-settings-grid"><article><p>اسم المتجر</p><strong>ChriGsm</strong><small>يظهر في الرأس ورسائل الحساب</small></article><article><p>عملة المتجر</p><strong>الدرهم المغربي (د.م.)</strong><small>معتمدة في الأسعار والمحافظ</small></article><article><p>WhatsApp Business</p><strong>مؤجل</strong><small>تحتاج API ورقم العمل قبل أي إرسال فعلي</small></article><article><p>المصادقة</p><strong>Firebase Authentication</strong><small>تُفعل بعد إنشاء مشروع Firebase</small></article></div><section className="whatsapp-placeholder"><MessageCircle size={21}/><div><p className="eyebrow">تكامل مؤجل وآمن</p><h3>إشعار WhatsApp عند إتمام الطلب</h3><p>لن تُرسل النسخة التجريبية أي رسالة. عند الجاهزية، سيُنفَّذ الإرسال من دالة خادمية بعد تسليم الطلب فقط، باستخدام رقم WhatsApp Business معتمد وقالب Meta مصادق عليه.</p><div className="whatsapp-requirements"><span>رقم عمل موثّق</span><span>Meta Business API</span><span>قالب رسالة معتمد</span><span>مفاتيح خادمية فقط</span></div></div></section></section>}
   </section>{deleteId && <div className="dialog-backdrop"><div className="confirm-dialog"><p className="eyebrow">حذف متسلسل</p><h2>حذف التصنيف وخدماته؟</h2><p>سيُحذف التصنيف «{data.categories.find((item) => item.id === deleteId)?.name}» وجميع خدماته التابعة غير المرتبطة بطلبات. اكتب اسم التصنيف للتأكيد.</p><input autoFocus value={typedName} onChange={(event) => setTypedName(event.target.value)} placeholder="اسم التصنيف"/><div><button className="filter-button" onClick={() => { setDeleteId(null); setTypedName(""); }} disabled={isSaving}>إلغاء</button><button className="danger-button" disabled={isSaving || typedName !== data.categories.find((item) => item.id === deleteId)?.name} onClick={deleteCategory}>تأكيد الحذف</button></div></div></div>}{editor && <EditorDialog editor={editor} categoryForm={categoryForm} serviceForm={serviceForm} categories={activeCategories} existingService={editor.id ? data.services.find((service) => service.id === editor.id) : undefined} saving={isSaving} onClose={() => setEditor(null)} onSave={saveEditor} onCategoryChange={setCategoryForm} onServiceChange={setServiceForm}/>}</div>;
 }

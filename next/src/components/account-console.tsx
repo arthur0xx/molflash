@@ -6,9 +6,9 @@ import { useRouter } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
 import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore";
 import { BellRing, CheckCircle2, ChevronDown, ClipboardList, KeyRound, LogOut, MessageCircle, Settings2, ShieldCheck, UserRound, WalletCards } from "lucide-react";
-import { formatMAD, statusLabels, type OrderNotification, type OrderStatus } from "@/lib/types";
+import { formatMAD, statusLabels, type OrderNotification, type OrderStatus, type SupportTicket } from "@/lib/types";
 import { firebaseServices } from "@/lib/firebase/client";
-import { saveBrowserDemoProfile, saveBrowserSupportTicket, type BrowserDemoOrder, type BrowserDemoProfile, type BrowserSupportTicket } from "@/lib/demo-browser";
+import { saveBrowserDemoProfile, type BrowserDemoOrder, type BrowserDemoProfile } from "@/lib/demo-browser";
 import { signOutDemo } from "@/lib/demo-auth";
 
 const orderTone = (status: BrowserDemoOrder["status"]) => ({ new: "blue", processing: "amber", waiting: "violet", completed: "green", rejected: "red" }[status]);
@@ -38,11 +38,13 @@ export function AccountConsole() {
   const [customer, setCustomer] = useState<CustomerProfile | null>(null);
   const [orders, setOrders] = useState<BrowserDemoOrder[]>([]);
   const [profileDraft, setProfileDraft] = useState<BrowserDemoProfile>({ fullName: "", phone: "", email: "" });
-  const [tickets, setTickets] = useState<BrowserSupportTicket[]>([]);
+  const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [showSettings, setShowSettings] = useState(false);
   const [showSupport, setShowSupport] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
   const [ticketSaved, setTicketSaved] = useState(false);
+  const [supportError, setSupportError] = useState("");
+  const [supportSaving, setSupportSaving] = useState(false);
 
   useEffect(() => {
     if (!firebase) { setAccountState("error"); setError("إعداد Firebase غير متاح."); return; }
@@ -63,14 +65,31 @@ export function AccountConsole() {
           return toOrder(orderDoc.id, raw, profile, serviceTitle);
         }));
         loadedOrders.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-        setCustomer(profile); setProfileDraft(profile); setOrders(loadedOrders); setAccountState("ready"); setError("");
+        const supportResponse = await fetch("/api/support", { headers: { Authorization: `Bearer ${await user.getIdToken()}` } });
+        const supportResult = await supportResponse.json().catch(() => ({})) as { tickets?: SupportTicket[]; error?: string };
+        if (!supportResponse.ok) throw new Error(supportResult.error || "تعذر تحميل رسائل الدعم.");
+        setCustomer(profile); setProfileDraft(profile); setOrders(loadedOrders); setTickets(supportResult.tickets || []); setAccountState("ready"); setError("");
       } catch (reason) { setAccountState("error"); setError(reason instanceof Error ? reason.message : "تعذر تحميل بيانات الحساب."); }
     });
   }, [firebase]);
 
   const unreadNotifications = orders.filter((order) => order.status === "completed" && order.notification);
   function submitProfile(event: FormEvent<HTMLFormElement>) { event.preventDefault(); saveBrowserDemoProfile(profileDraft); setProfileSaved(true); }
-  function submitSupport(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const formElement = event.currentTarget; const form = new FormData(formElement); saveBrowserSupportTicket({ id: `SUP-DEMO-${String(Date.now()).slice(-6)}`, subject: String(form.get("subject") || "الدعم"), message: String(form.get("message") || ""), status: "open", createdAt: new Date().toISOString() }); setTicketSaved(true); formElement.reset(); }
+  async function submitSupport(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const user = firebase?.auth.currentUser;
+    if (!user) { setSupportError("يتطلب إرسال الدعم تسجيل الدخول عبر Firebase."); return; }
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    try {
+      setSupportSaving(true); setSupportError(""); setTicketSaved(false);
+      const response = await fetch("/api/support", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${await user.getIdToken()}` }, body: JSON.stringify({ subject: String(form.get("subject") || ""), message: String(form.get("message") || "") }) });
+      const result = await response.json().catch(() => ({})) as { ticket?: SupportTicket; error?: string };
+      if (!response.ok || !result.ticket) throw new Error(result.error || "تعذر إرسال طلب الدعم.");
+      setTickets((previous) => [result.ticket!, ...previous]); setTicketSaved(true); formElement.reset();
+    } catch (reason) { setSupportError(reason instanceof Error ? reason.message : "تعذر إرسال طلب الدعم."); }
+    finally { setSupportSaving(false); }
+  }
   function signOut() { signOutDemo(); router.push("/login"); }
 
   if (accountState === "loading") return <main className="store-shell account-shell"><section className="account-panel"><p className="eyebrow">منطقة العميل</p><h1>جارٍ التحقق من الحساب…</h1><p className="panel-intro">لا تُحمّل أي بيانات طلبات قبل تأكيد هوية Firebase.</p></section></main>;
@@ -82,7 +101,7 @@ export function AccountConsole() {
     {unreadNotifications.length > 0 && <section className="order-notification"><BellRing size={21}/><div><p>إشعار الطلب</p><b>{unreadNotifications[0].notification?.title}</b><span>{unreadNotifications[0].notification?.body}</span></div><span className="status-pill green">تم التسليم</span></section>}
     <section className="account-actions" aria-label="إجراءات الحساب"><button type="button" className={showSettings ? "active" : ""} onClick={() => { setShowSettings(!showSettings); setShowSupport(false); }}><Settings2 size={18}/><span>إعدادات الحساب</span><ChevronDown size={15}/></button><button type="button" className={showSupport ? "active" : ""} onClick={() => { setShowSupport(!showSupport); setShowSettings(false); }}><MessageCircle size={18}/><span>الدعم الفني</span><ChevronDown size={15}/></button><button type="button" className="account-logout" onClick={signOut}><LogOut size={18}/><span>تسجيل الخروج</span></button></section>
     {showSettings && <section className="account-panel"><div className="panel-heading"><div><p className="eyebrow">بيانات العميل</p><h2>إعدادات الحساب</h2></div><UserRound size={22}/></div><form className="settings-form" onSubmit={submitProfile}><label><span>الاسم الكامل</span><input value={profileDraft.fullName} onChange={(event) => setProfileDraft({ ...profileDraft, fullName: event.target.value })} required/></label><label><span>رقم الهاتف</span><input type="tel" value={profileDraft.phone} onChange={(event) => setProfileDraft({ ...profileDraft, phone: event.target.value })} required/></label><label><span>البريد الإلكتروني</span><input type="email" value={profileDraft.email} onChange={(event) => setProfileDraft({ ...profileDraft, email: event.target.value })} required/></label><div className="settings-password"><KeyRound size={18}/><div><b>كلمة المرور</b><p>تسجيل الدخول يعمل عبر Firebase Authentication. ستُضاف إعادة تعيين كلمة المرور عبر البريد في مرحلة الحسابات الكاملة.</p></div><button type="button" className="outline-button" disabled>إرسال رابط التغيير</button></div><div className="form-actions"><button className="primary-button" type="submit">حفظ التغييرات</button>{profileSaved && <span className="saved-inline"><CheckCircle2 size={16}/> حُفظت محليًا</span>}</div></form></section>}
-    {showSupport && <section className="account-panel"><div className="panel-heading"><div><p className="eyebrow">مساعدة الطلبات والحساب</p><h2>الدعم الفني</h2></div><MessageCircle size={22}/></div><p className="panel-intro">أنشئ رسالة دعم مرتبطة بحسابك. ستظهر لفريق CMC عند ربط قاعدة البيانات، وسيُضاف WhatsApp Business دون إرسال رسائل حقيقية الآن.</p><form className="support-form" onSubmit={submitSupport}><label><span>موضوع الرسالة</span><input name="subject" placeholder="مثال: أحتاج مساعدة في طلبي" required/></label><label><span>تفاصيل المشكلة</span><textarea name="message" placeholder="اكتب رقم الطلب أو اشرح ما تحتاجه..." required/></label><button className="primary-button" type="submit">إرسال طلب الدعم التجريبي</button>{ticketSaved && <span className="saved-inline"><CheckCircle2 size={16}/> أضيف طلب الدعم إلى سجل هذا المتصفح</span>}</form>{tickets.length > 0 && <div className="ticket-list"><h3>رسائل الدعم التجريبية</h3>{tickets.map((ticket) => <article key={ticket.id}><div><b>{ticket.subject}</b><p>{ticket.message}</p></div><span>{ticket.status === "open" ? "مفتوح" : "تم الرد"}</span></article>)}</div>}</section>}
+    {showSupport && <section className="account-panel"><div className="panel-heading"><div><p className="eyebrow">مساعدة الطلبات والحساب</p><h2>الدعم الفني</h2></div><MessageCircle size={22}/></div><p className="panel-intro">أنشئ رسالة دعم مرتبطة بحسابك. تُحفظ في Firebase وتظهر لفريق CMC، بينما يبقى WhatsApp Business مؤجلًا من دون إرسال أي رسالة فعلية.</p><form className="support-form" onSubmit={submitSupport}><label><span>موضوع الرسالة</span><input name="subject" placeholder="مثال: أحتاج مساعدة في طلبي" minLength={4} required disabled={supportSaving}/></label><label><span>تفاصيل المشكلة</span><textarea name="message" placeholder="اكتب رقم الطلب أو اشرح ما تحتاجه..." minLength={10} required disabled={supportSaving}/></label><button className="primary-button" type="submit" disabled={supportSaving}>{supportSaving ? "جارٍ الإرسال..." : "إرسال طلب الدعم"}</button>{ticketSaved && <span className="saved-inline"><CheckCircle2 size={16}/> حُفظ طلب الدعم في Firebase</span>}{supportError && <span className="form-error">{supportError}</span>}</form>{tickets.length > 0 && <div className="ticket-list"><h3>رسائلي للدعم</h3>{tickets.map((ticket) => <article key={ticket.id}><div><b>{ticket.subject}</b><p>{ticket.message}</p>{ticket.reply && <div className="ticket-reply"><b>رد CMC</b><p>{ticket.reply.message}</p></div>}</div><span>{ticket.status === "open" ? "مفتوح" : "تم الرد"}</span></article>)}</div>}</section>}
     <section className="section-block"><div className="section-title"><div><p className="eyebrow">متابعة مباشرة</p><h2>طلباتي</h2></div><span className="muted-text">{orders.length} طلبات</span></div><div className="order-list">{orders.map((order) => <OrderRow key={order.id} order={order} />)}</div></section>
     <section className="security-note"><ShieldCheck size={21}/><div><h3>بياناتك معزولة عن باقي العملاء</h3><p>تُحمّل منطقة الحساب بعد تحقق Firebase فقط، وتسمح قواعد Firestore لكل عميل بقراءة طلباته ووثيقة حسابه وحدهما.</p></div></section>
   </main>;

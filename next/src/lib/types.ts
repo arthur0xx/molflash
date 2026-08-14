@@ -81,6 +81,25 @@ export interface WalletEntry {
   createdBy: string;
 }
 
+export type SupportTicketStatus = "open" | "answered";
+
+export interface SupportReply {
+  message: string;
+  createdAt: string;
+  createdBy: string;
+}
+
+export interface SupportTicket {
+  id: string;
+  customerId: string;
+  subject: string;
+  message: string;
+  status: SupportTicketStatus;
+  createdAt: string;
+  updatedAt: string;
+  reply?: SupportReply;
+}
+
 export interface DemoSnapshot {
   categories: Category[];
   services: Service[];

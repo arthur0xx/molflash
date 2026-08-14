@@ -28,6 +28,11 @@ service cloud.firestore {
       allow read: if admin() || (signedIn() && resource.data.customerId == request.auth.uid);
       allow write: if false;
     }
+    match /supportTickets/{ticketId} {
+      allow read: if admin() || (signedIn() && resource.data.customerId == request.auth.uid);
+      // الرسائل والردود تمر عبر مسارات خادمية تتحقق من الهوية وتسجل التدقيق؛ لا كتابة مباشرة.
+      allow write: if false;
+    }
     match /auditLogs/{logId} { allow read: if admin(); allow write: if false; }
   }
 }
