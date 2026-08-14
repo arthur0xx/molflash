@@ -7,11 +7,13 @@ service cloud.firestore {
 
     match /categories/{categoryId} {
       allow read: if true;
-      allow write: if admin();
+      // تتطلب جميع كتابات CMC تحققًا خادميًا وسجل تدقيق؛ لا كتابة مباشرة من العميل.
+      allow write: if false;
     }
     match /services/{serviceId} {
       allow read: if resource.data.isActive == true || admin();
-      allow write: if admin();
+      // تتطلب جميع كتابات CMC تحققًا خادميًا وسجل تدقيق؛ لا كتابة مباشرة من العميل.
+      allow write: if false;
     }
     match /customers/{customerId} {
       allow read: if admin() || ownsCustomer(customerId);
