@@ -44,7 +44,7 @@ export function AdminConsole({ initial }: { initial: DemoSnapshot }) {
   const [walletSavingId, setWalletSavingId] = useState<string | null>(null);
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const [supportSavingId, setSupportSavingId] = useState<string | null>(null);
-  const [mediaStatus, setMediaStatus] = useState<MediaStatus | null>(null);
+  const [mediaStatus, setMediaStatus] = useState<MediaStatus | null>(() => firebase ? null : { configured: false });
   const [imageUploading, setImageUploading] = useState(false);
 
   useEffect(() => {
@@ -65,7 +65,7 @@ export function AdminConsole({ initial }: { initial: DemoSnapshot }) {
   }, [firebase]);
 
   useEffect(() => {
-    if (!firebase) { setMediaStatus({ configured: false }); return; }
+    if (!firebase) return;
     return onAuthStateChanged(firebase.auth, async (user) => {
       if (!user) { setMediaStatus(null); return; }
       try {
