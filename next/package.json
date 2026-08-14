@@ -10,6 +10,7 @@
     "emulators": "npx firebase-tools emulators:start --only auth,firestore,storage",
     "test:firestore-rules": "npx firebase-tools emulators:exec --only firestore 'tsx src/scripts/test-firestore-rules.ts'",
     "seed:demo": "tsx src/scripts/seed-demo.ts",
+    "clear:demo:dry": "tsx src/scripts/clear-demo.ts --dry-run",
     "clear:demo": "tsx src/scripts/clear-demo.ts",
     "clear:demo:all": "tsx src/scripts/clear-demo.ts --delete-demo-auth"
   },
