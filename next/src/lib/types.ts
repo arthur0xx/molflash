@@ -29,6 +29,7 @@ export interface Service {
   priceMad: number;
   delivery: string;
   badge?: string;
+  imageUrl?: string;
   isActive: boolean;
   fields: DynamicField[];
 }

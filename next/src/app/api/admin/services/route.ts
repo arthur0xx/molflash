@@ -27,6 +27,7 @@ const serviceSchema = z.object({
   priceMad: z.number().finite().min(0, "السعر لا يمكن أن يكون سالبًا").max(1000000, "السعر أكبر من الحد المسموح"),
   delivery: z.string().trim().min(2, "مدة أو نوع التسليم مطلوب").max(200, "معلومة التسليم طويلة جدًا"),
   badge: z.string().trim().max(80, "الشارة طويلة جدًا").optional(),
+  imageUrl: z.string().trim().url("رابط الصورة غير صحيح").refine((value) => value.startsWith("https://"), "رابط الصورة يجب أن يستخدم HTTPS").max(2000, "رابط الصورة طويل جدًا").optional(),
   isActive: z.boolean().default(false),
   fields: z.array(dynamicFieldSchema).max(20, "عدد الحقول كبير جدًا").default([]),
 }).superRefine((service, context) => {

@@ -6,7 +6,7 @@ export function ServiceCard({ service, categoryName }: { service: Service; categ
   return (
     <article className="service-card">
       <div className="service-card-top">
-        <span className="service-glyph">{service.title.slice(0, 2).toUpperCase()}</span>
+        {service.imageUrl ? <img className="service-image" src={service.imageUrl} alt=""/> : <span className="service-glyph">{service.title.slice(0, 2).toUpperCase()}</span>}
         {service.badge && <span className="tag tag-blue">{service.badge}</span>}
       </div>
       <p className="eyebrow">{categoryName || "خدمة رقمية"}</p>

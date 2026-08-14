@@ -27,6 +27,7 @@ const updateServiceSchema = z.object({
   priceMad: z.number().finite().min(0, "السعر لا يمكن أن يكون سالبًا").max(1000000, "السعر أكبر من الحد المسموح").optional(),
   delivery: z.string().trim().min(2, "مدة أو نوع التسليم مطلوب").max(200, "معلومة التسليم طويلة جدًا").optional(),
   badge: z.string().trim().max(80, "الشارة طويلة جدًا").nullable().optional(),
+  imageUrl: z.string().trim().url("رابط الصورة غير صحيح").refine((value) => value.startsWith("https://"), "رابط الصورة يجب أن يستخدم HTTPS").max(2000, "رابط الصورة طويل جدًا").nullable().optional(),
   isActive: z.boolean().optional(),
   fields: z.array(dynamicFieldSchema).max(20, "عدد الحقول كبير جدًا").optional(),
 }).refine((body) => Object.keys(body).length > 0, "لا توجد بيانات للتعديل").superRefine((service, context) => {
@@ -69,6 +70,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     const now = new Date().toISOString();
     const update = { ...parsed.data, updatedAt: now, updatedBy: admin.uid };
     if (parsed.data.badge === null) update.badge = "";
+    if (parsed.data.imageUrl === null) update.imageUrl = "";
     await reference.update(update);
     await db.collection("auditLogs").add({ action: "service_updated", serviceId, fields: Object.keys(parsed.data), actorUid: admin.uid, at: now });
 
