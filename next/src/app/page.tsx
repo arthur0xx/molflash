@@ -8,11 +8,23 @@ export const dynamic = "force-dynamic";
 
 export default async function Home() {
   const snapshot = await getStorefrontSnapshot();
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://temporary-speedy-jade-mdelya8.vercel.app";
+  const structuredData = {
+    "@context": "https://schema.org",
+    "@type": "OnlineStore",
+    name: "ChriGsm",
+    url: siteUrl,
+    logo: `${siteUrl}/brand/cg-logo.png`,
+    image: `${siteUrl}/brand/cg-social.png`,
+    description: "متجر مغربي لخدمات GSM الرقمية والتفعيل والأدوات.",
+    inLanguage: "ar-MA",
+    areaServed: "MA",
+  };
   const active = snapshot.services.filter((service) => service.isActive);
   const popular = active.filter((service) => service.categoryId !== "misc").slice(0, 4);
   const extras = active.filter((service) => service.categoryId === "misc").slice(0, 3);
 
-  return <><Header /><main className="store-shell home-shell">
+  return <><script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }} /><Header /><main className="store-shell home-shell">
     <section className="home-status" aria-label="حالة المتجر">
       <div><p className="eyebrow">ChriGsm</p><h1>الخدمات الرقمية</h1></div>
       <span className="live-pill"><span /> متجر متصل</span>

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { Grid2X2, Home, ShoppingBag, UserRound } from "lucide-react";
 import { usePathname } from "next/navigation";
@@ -43,7 +44,7 @@ export function Header() {
   const cartCount = useCartCount();
   return <header className="site-header">
     <Link href="/" className="brand" aria-label="ChriGsm الرئيسية">
-      <span className="brand-mark" aria-hidden="true">CG</span><span>ChriGsm</span>
+      <span className="brand-mark" aria-hidden="true"><Image src="/brand/cg-logo.png" alt="" width={36} height={36} priority /></span><span>ChriGsm</span>
     </Link>
     <nav className="top-nav" aria-label="التنقل الرئيسي">
       {navigation.map((item) => <Link key={item.href} href={item.href} className={isCurrent(pathname, item.href) ? "nav-current" : ""} aria-current={isCurrent(pathname, item.href) ? "page" : undefined}>{item.label}</Link>)}
