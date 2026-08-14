@@ -17,7 +17,8 @@ service cloud.firestore {
     }
     match /customers/{customerId} {
       allow read: if admin() || ownsCustomer(customerId);
-      allow write: if admin();
+      // تعديلات الرصيد تتم ذريًا في مسار خادمي يضيف قيد محفظة وسجل تدقيق؛ لا كتابة مباشرة من العميل حتى للمدير.
+      allow write: if false;
     }
     match /orders/{orderId} {
       allow read: if admin() || (signedIn() && resource.data.customerId == request.auth.uid);
