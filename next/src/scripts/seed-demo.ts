@@ -10,14 +10,20 @@ if (!projectId || !clientEmail || !privateKey) {
   throw new Error("Firebase Admin credentials are required. Copy .env.example to .env.local and fill server-only values.");
 }
 
+function requiredDemoPassword(name: "DEMO_ADMIN_PASSWORD" | "DEMO_CUSTOMER_PASSWORD") {
+  const value = process.env[name];
+  if (!value || value.length < 12) throw new Error(`${name} must be set to a strong demo-only password before seeding.`);
+  return value;
+}
+
 const app = getApps().length ? getApps()[0] : initializeApp({ credential: cert({ projectId, clientEmail, privateKey }) });
 const db = getFirestore(app);
 const auth = getAuth(app);
 
 type DemoUser = { uid: string; email: string; password: string; displayName: string; role?: "admin" };
 const demoUsers: DemoUser[] = [
-  { uid: "admin-demo", email: "admin@chrigsm.test", password: "AdminDemo2026!", displayName: "مدير ChriGsm", role: "admin" },
-  { uid: "cus-yassine", email: "yassine.demo@chrigsm.test", password: "ClientDemo2026!", displayName: "ياسين الفاسي" },
+  { uid: "admin-demo", email: "admin@chrigsm.test", password: requiredDemoPassword("DEMO_ADMIN_PASSWORD"), displayName: "مدير ChriGsm", role: "admin" },
+  { uid: "cus-yassine", email: "yassine.demo@chrigsm.test", password: requiredDemoPassword("DEMO_CUSTOMER_PASSWORD"), displayName: "ياسين الفاسي" },
 ];
 
 async function ensureDemoAuth() {
@@ -50,7 +56,7 @@ async function main() {
   await ensureDemoAuth();
   for (const collection of ["categories", "services", "customers", "orders", "walletEntries"] as const) await writeCollection(collection);
   await db.collection("auditLogs").doc("demo-seed").set({ demo: true, event: "seed", at: new Date().toISOString(), actor: "system" });
-  console.log("Demo seed finished. Run npm run clear:demo to remove only demo documents.");
+  console.log("Demo seed finished. Run npm run clear:demo to remove demo documents or npm run clear:demo:all to also delete demo Authentication users.");
 }
 
 main().catch((error) => { console.error(error); process.exit(1); });
