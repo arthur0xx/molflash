@@ -31,7 +31,7 @@ function validEmail(value: string) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(va
 
 async function authModules() {
   const [
-    { createUserWithEmailAndPassword, getIdTokenResult, onAuthStateChanged, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, updateProfile },
+    { createUserWithEmailAndPassword, deleteUser, getIdTokenResult, onAuthStateChanged, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, updateProfile },
     { doc, getDoc },
     { firebaseServices },
   ] = await Promise.all([
@@ -39,7 +39,7 @@ async function authModules() {
     import("firebase/firestore"),
     import("@/lib/firebase/client"),
   ]);
-  return { createUserWithEmailAndPassword, getIdTokenResult, onAuthStateChanged, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, updateProfile, doc, getDoc, firebaseServices };
+  return { createUserWithEmailAndPassword, deleteUser, getIdTokenResult, onAuthStateChanged, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, updateProfile, doc, getDoc, firebaseServices };
 }
 
 async function firebaseSession(user: FirebaseUserLike): Promise<DemoSession> {
@@ -114,7 +114,7 @@ export async function registerCustomer(fullName: string, phone: string, email: s
   if (!validEmail(normalized)) return "invalid-email";
   if (name.length < 2 || password.length < 8) return "weak-password";
 
-  const { createUserWithEmailAndPassword, firebaseServices, signOut, updateProfile } = await authModules();
+  const { createUserWithEmailAndPassword, deleteUser, firebaseServices, signOut, updateProfile } = await authModules();
   const services = firebaseServices();
   if (!services) return "unavailable";
 
@@ -128,6 +128,7 @@ export async function registerCustomer(fullName: string, phone: string, email: s
       body: JSON.stringify({ fullName: name, phone: phone.trim() }),
     });
     if (!response.ok) {
+      await deleteUser(credential.user).catch(() => undefined);
       await signOut(services.auth).catch(() => undefined);
       return "unavailable";
     }

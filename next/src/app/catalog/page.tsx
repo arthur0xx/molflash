@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { BottomNav, Header } from "@/components/header";
 import { CatalogBrowser } from "@/components/catalog-browser";
 import { getStorefrontSnapshot } from "@/lib/repository";
+import { safeJsonLd } from "@/lib/seo";
 
 export const metadata: Metadata = {
   title: "كتالوج خدمات GSM الرقمية",
@@ -25,7 +26,7 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
     numberOfItems: services.length,
   };
 
-  return <><script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }} /><Header /><main className="store-shell catalog-shell">
+  return <><script type="application/ld+json" dangerouslySetInnerHTML={{ __html: safeJsonLd(structuredData) }} /><Header /><main className="store-shell catalog-shell">
     <section className="page-heading catalog-heading"><div><p className="eyebrow">الكتالوج الرقمي</p><h1>{currentCategory ? currentCategory.name : "كل الخدمات"}</h1><p>اختر الخدمة، أرسل الحقول المطلوبة، وتابع حالة المعالجة من حسابك.</p></div><span className="catalog-count">{services.length} خدمات</span></section>
     <CatalogBrowser services={services} categories={snapshot.categories} initialCategory={category} />
   </main><BottomNav /></>;

@@ -3,6 +3,7 @@ import { ArrowLeft, CircleHelp, MessageCircle, Search } from "lucide-react";
 import { BottomNav, Header } from "@/components/header";
 import { ServiceCard } from "@/components/service-card";
 import { getStorefrontSnapshot } from "@/lib/repository";
+import { safeJsonLd } from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +25,7 @@ export default async function Home() {
   const popular = active.filter((service) => service.categoryId !== "misc").slice(0, 4);
   const extras = active.filter((service) => service.categoryId === "misc").slice(0, 3);
 
-  return <><script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }} /><Header /><main className="store-shell home-shell">
+  return <><script type="application/ld+json" dangerouslySetInnerHTML={{ __html: safeJsonLd(structuredData) }} /><Header /><main className="store-shell home-shell">
     <section className="home-status" aria-label="حالة المتجر">
       <div><p className="eyebrow">ChriGsm</p><h1>الخدمات الرقمية</h1></div>
       <span className="live-pill"><span /> متجر متصل</span>
