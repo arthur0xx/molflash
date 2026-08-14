@@ -44,6 +44,12 @@ export interface Customer {
   whatsappEnabled: boolean;
 }
 
+export interface CustomerProfile {
+  fullName: string;
+  phone: string;
+  email: string;
+}
+
 export interface OrderStatusEvent {
   status: OrderStatus;
   at: string;
