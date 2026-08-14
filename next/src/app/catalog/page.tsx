@@ -1,10 +1,10 @@
 import { BottomNav, Header } from "@/components/header";
 import { CatalogBrowser } from "@/components/catalog-browser";
-import { getSnapshot } from "@/lib/repository";
+import { getStorefrontSnapshot } from "@/lib/repository";
 
 export default async function CatalogPage({ searchParams }: { searchParams: Promise<{ category?: string }> }) {
   const { category } = await searchParams;
-  const snapshot = await getSnapshot();
+  const snapshot = await getStorefrontSnapshot();
   const currentCategory = snapshot.categories.find((item) => item.id === category);
   const services = snapshot.services.filter((service) => service.isActive);
   return <><Header /><main className="store-shell catalog-shell">

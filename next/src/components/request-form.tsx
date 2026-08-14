@@ -4,8 +4,6 @@ import { useState } from "react";
 import { CheckCircle2, Send } from "lucide-react";
 import type { Service } from "@/lib/types";
 import { firebaseServices } from "@/lib/firebase/client";
-import { getBrowserDemoProfile, saveBrowserDemoOrder } from "@/lib/demo-browser";
-import { getDemoSession } from "@/lib/demo-auth";
 
 export function RequestForm({ service }: { service: Service }) {
   const [submitted, setSubmitted] = useState(false);
@@ -21,29 +19,22 @@ export function RequestForm({ service }: { service: Service }) {
     const answers = Object.fromEntries(form.entries().map(([key, value]) => [key, String(value)]));
     const services = firebaseServices();
 
-    if (services) {
-      try {
-        const user = services.auth.currentUser;
-        if (!user) throw new Error("سجّل الدخول أولًا لإنشاء الطلب.");
-        const response = await fetch("/api/orders", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${await user.getIdToken()}` }, body: JSON.stringify({ serviceId: service.id, formData: answers }) });
-        const payload = await response.json() as { id?: string; error?: string };
-        if (!response.ok || !payload.id) throw new Error(payload.error || "تعذر إنشاء الطلب.");
-        setOrderId(payload.id); setSubmitted(true); formElement.reset();
-      } catch (reason) {
-        setError(reason instanceof Error ? reason.message : "تعذر إنشاء الطلب.");
-      } finally { setSubmitting(false); }
+    if (!services) {
+      setError("إنشاء الطلب غير متاح لأن اتصال Firebase غير مكتمل.");
+      setSubmitting(false);
       return;
     }
 
-    const id = `ORD-DEMO-${String(Date.now()).slice(-6)}`;
-    const now = new Date().toISOString();
-    const session = getDemoSession();
-    const profile = getBrowserDemoProfile();
-    const customerName = profile?.fullName || session?.fullName || "ياسين الفاسي";
-    const customerPhone = profile?.phone || session?.phone || "+212 600-111222";
-    const customerEmail = profile?.email || session?.email || "yassine.demo@chrigsm.test";
-    saveBrowserDemoOrder({ id, customerId: "cus-yassine", customerName, customerPhone, customerEmail, serviceId: service.id, serviceTitle: service.title, totalMad: service.priceMad, status: "new", createdAt: now, updatedAt: now, answers, statusHistory: [{ status: "new", at: now, note: "أرسل العميل الطلب والبيانات المطلوبة" }] });
-    setOrderId(id); setSubmitted(true); setSubmitting(false);
+    try {
+      const user = services.auth.currentUser;
+      if (!user) throw new Error("سجّل الدخول أولًا لإنشاء الطلب.");
+      const response = await fetch("/api/orders", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${await user.getIdToken()}` }, body: JSON.stringify({ serviceId: service.id, formData: answers }) });
+      const payload = await response.json().catch(() => ({})) as { id?: string; error?: string };
+      if (!response.ok || !payload.id) throw new Error(payload.error || "تعذر إنشاء الطلب.");
+      setOrderId(payload.id); setSubmitted(true); formElement.reset();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "تعذر إنشاء الطلب.");
+    } finally { setSubmitting(false); }
   }
 
   return <form className="request-form" onSubmit={submit}>

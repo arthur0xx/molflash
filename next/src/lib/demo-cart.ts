@@ -1,11 +1,15 @@
 import type { Service } from "@/lib/types";
 
 const DEMO_CART_KEY = "chrigsm:demo-cart";
-export type BrowserCartItem = Pick<Service, "id" | "slug" | "title" | "priceMad" | "categoryId">;
+export type BrowserCartItem = Pick<Service, "id">;
 
 function read(): BrowserCartItem[] {
   if (typeof window === "undefined") return [];
-  try { const raw = window.localStorage.getItem(DEMO_CART_KEY); return raw ? JSON.parse(raw) as BrowserCartItem[] : []; } catch { return []; }
+  try {
+    const raw = window.localStorage.getItem(DEMO_CART_KEY);
+    const parsed = raw ? JSON.parse(raw) as Array<Partial<BrowserCartItem>> : [];
+    return parsed.filter((item): item is BrowserCartItem => typeof item?.id === "string").map((item) => ({ id: item.id }));
+  } catch { return []; }
 }
 function save(items: BrowserCartItem[]) {
   if (typeof window === "undefined") return;
@@ -16,6 +20,6 @@ function save(items: BrowserCartItem[]) {
 export function getBrowserCartItems() { return read(); }
 export function addBrowserCartItem(service: Service) {
   const items = read();
-  if (!items.some((item) => item.id === service.id)) save([...items, { id: service.id, slug: service.slug, title: service.title, priceMad: service.priceMad, categoryId: service.categoryId }]);
+  if (!items.some((item) => item.id === service.id)) save([...items, { id: service.id }]);
 }
 export function removeBrowserCartItem(serviceId: string) { save(read().filter((item) => item.id !== serviceId)); }

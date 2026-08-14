@@ -1,69 +1,88 @@
 import { NextRequest, NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
-import { adminAuth, adminDb } from "@/lib/firebase/admin";
+import { z } from "zod";
+import { adminDb } from "@/lib/firebase/admin";
+import { requireAdmin } from "@/lib/api/admin-auth";
 import { statusLabels, type OrderStatus } from "@/lib/types";
 
-const allowedStatuses: OrderStatus[] = ["new", "processing", "waiting", "completed", "rejected"];
+const orderStatuses = ["new", "processing", "waiting", "completed", "rejected"] as const;
+const updateOrderSchema = z.object({
+  status: z.enum(orderStatuses).optional(),
+  deliveryCode: z.string().trim().max(500).optional(),
+  deliveryNote: z.string().trim().max(1000).optional(),
+});
+const allowedTransitions: Record<OrderStatus, OrderStatus[]> = {
+  new: ["processing", "waiting", "completed", "rejected"],
+  processing: ["waiting", "completed", "rejected"],
+  waiting: ["processing", "completed", "rejected"],
+  completed: [],
+  rejected: [],
+};
 
-type UpdateBody = { status?: OrderStatus; deliveryCode?: string; deliveryNote?: string };
-
-async function requireAdmin(request: NextRequest) {
-  const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
-  const auth = adminAuth();
-  if (!token || !auth) return null;
-  const decoded = await auth.verifyIdToken(token);
-  return decoded.role === "admin" ? decoded : null;
+class OrderStatusError extends Error {
+  constructor(readonly status: number, message: string) { super(message); }
 }
 
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const admin = await requireAdmin(request);
+  if (!admin) return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
+
+  const db = adminDb();
+  if (!db) return NextResponse.json({ error: "إعداد Firebase الخادمي غير مكتمل" }, { status: 503 });
+
   try {
-    const admin = await requireAdmin(request);
-    if (!admin) return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
-    const db = adminDb();
-    if (!db) return NextResponse.json({ error: "إعداد Firebase الخادمي غير مكتمل" }, { status: 503 });
-
+    const parsed = updateOrderSchema.safeParse(await request.json());
+    if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message || "بيانات تحديث الطلب غير صحيحة" }, { status: 400 });
     const { id } = await context.params;
-    const body = await request.json() as UpdateBody;
-    const orderRef = db.collection("orders").doc(id);
-    const snapshot = await orderRef.get();
-    if (!snapshot.exists) return NextResponse.json({ error: "الطلب غير موجود" }, { status: 404 });
-
-    const current = snapshot.data() as { status?: OrderStatus; serviceId?: string };
+    const deliveryCode = parsed.data.deliveryCode || "";
+    const deliveryNote = parsed.data.deliveryNote || "";
     const now = new Date().toISOString();
-    const status = body.status && allowedStatuses.includes(body.status) ? body.status : current.status;
-    if (!status) return NextResponse.json({ error: "حالة الطلب غير صحيحة" }, { status: 400 });
+    let nextStatus: OrderStatus | null = null;
 
-    const deliveryCode = body.deliveryCode?.trim();
-    const deliveryNote = body.deliveryNote?.trim();
-    const isDelivery = Boolean(deliveryCode);
-    const history = {
-      status: isDelivery ? "completed" : status,
-      at: now,
-      note: isDelivery
-        ? "تم إرسال كود أو تفاصيل التسليم إلى حساب العميل."
-        : status === "processing"
-          ? "بدأ فريق ChriGsm معالجة الطلب. بيانات العميل أصبحت مقفلة."
-          : `غيّر فريق ChriGsm الحالة إلى «${statusLabels[status]}».`,
-    };
-    const nextStatus = isDelivery ? "completed" : status;
-    const update: Record<string, unknown> = {
-      status: nextStatus,
-      updatedAt: now,
-      statusHistory: FieldValue.arrayUnion(history),
-    };
+    await db.runTransaction(async (transaction) => {
+      const orderReference = db.collection("orders").doc(id);
+      const auditReference = db.collection("auditLogs").doc();
+      const orderSnapshot = await transaction.get(orderReference);
+      if (!orderSnapshot.exists) throw new OrderStatusError(404, "الطلب غير موجود");
 
-    if (isDelivery) {
-      const service = current.serviceId ? await db.collection("services").doc(current.serviceId).get() : null;
-      const title = service?.data()?.title || "الخدمة";
-      update.deliveryCode = deliveryCode;
-      update.deliveryNote = deliveryNote || "";
-      update.notification = { title: "تم إنجاز طلبك بنجاح", body: `تم تسليم ${title}. راجع كود التسليم في تفاصيل الطلب.`, createdAt: now, read: false };
-    }
+      const current = orderSnapshot.data() as { status?: OrderStatus; serviceId?: string };
+      if (!current.status || !orderStatuses.includes(current.status)) throw new OrderStatusError(409, "حالة الطلب الحالية غير صحيحة");
+      const requestedStatus = deliveryCode ? "completed" : parsed.data.status;
+      if (!requestedStatus) throw new OrderStatusError(400, "اختر حالة جديدة أو أرسل تفاصيل التسليم");
+      if (deliveryCode && parsed.data.status && parsed.data.status !== "completed") throw new OrderStatusError(400, "لا يمكن إرسال تفاصيل التسليم مع حالة مختلفة عن مكتمل");
+      if (!allowedTransitions[current.status].includes(requestedStatus)) throw new OrderStatusError(409, "انتقال حالة الطلب غير مسموح");
 
-    await orderRef.update(update);
-    await db.collection("auditLogs").add({ action: isDelivery ? "order_delivered" : "order_status_updated", orderId: id, actorUid: admin.uid, at: now, demo: true });
+      const history = {
+        status: requestedStatus,
+        at: now,
+        note: deliveryCode
+          ? "تم إرسال كود أو تفاصيل التسليم إلى حساب العميل."
+          : requestedStatus === "processing"
+            ? "بدأ فريق ChriGsm معالجة الطلب. بيانات العميل أصبحت مقفلة."
+            : `غيّر فريق ChriGsm الحالة إلى «${statusLabels[requestedStatus]}».`,
+      };
+      const update: Record<string, unknown> = {
+        status: requestedStatus,
+        updatedAt: now,
+        statusHistory: FieldValue.arrayUnion(history),
+      };
+
+      if (deliveryCode) {
+        const serviceSnapshot = current.serviceId ? await transaction.get(db.collection("services").doc(current.serviceId)) : null;
+        const title = serviceSnapshot?.data()?.title || "الخدمة";
+        update.deliveryCode = deliveryCode;
+        update.deliveryNote = deliveryNote;
+        update.notification = { title: "تم إنجاز طلبك بنجاح", body: `تم تسليم ${title}. راجع كود التسليم في تفاصيل الطلب.`, createdAt: now, read: false };
+      }
+
+      transaction.update(orderReference, update);
+      transaction.create(auditReference, { action: deliveryCode ? "order_delivered" : "order_status_updated", orderId: id, customerId: orderSnapshot.data()?.customerId || null, actorUid: admin.uid, at: now, demo: true });
+      nextStatus = requestedStatus;
+    });
+
     return NextResponse.json({ ok: true, status: nextStatus, updatedAt: now });
   } catch (error) {
+    if (error instanceof OrderStatusError) return NextResponse.json({ error: error.message }, { status: error.status });
     console.error("Failed to update order", error);
     return NextResponse.json({ error: "تعذر تحديث الطلب" }, { status: 500 });
   }

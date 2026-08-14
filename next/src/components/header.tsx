@@ -50,7 +50,7 @@ export function Header() {
     </nav>
     <div className="header-actions">
       <Link className={`icon-button ${isCurrent(pathname, accountHref) ? "icon-current" : ""}`} href={accountHref} aria-label={session ? session.fullName : "تسجيل الدخول"}><UserRound size={19} /></Link>
-      <Link className="icon-button cart-dot" href={cartHref} aria-label={session ? "السلة" : "سجل الدخول لرؤية السلة"}><ShoppingBag size={19} /><span>{session ? cartCount : 0}</span></Link>
+      <Link className="icon-button cart-dot" href={cartHref} aria-label={session ? "قائمة الاختيارات المحلية" : "سجّل الدخول لرؤية قائمة الاختيارات"}><ShoppingBag size={19} /><span>{session ? cartCount : 0}</span></Link>
     </div>
   </header>;
 }

@@ -2,12 +2,12 @@ import Link from "next/link";
 import { ArrowLeft, CircleHelp, MessageCircle, Search } from "lucide-react";
 import { BottomNav, Header } from "@/components/header";
 import { ServiceCard } from "@/components/service-card";
-import { getSnapshot } from "@/lib/repository";
+import { getStorefrontSnapshot } from "@/lib/repository";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const snapshot = await getSnapshot();
+  const snapshot = await getStorefrontSnapshot();
   const active = snapshot.services.filter((service) => service.isActive);
   const popular = active.filter((service) => service.categoryId !== "misc").slice(0, 4);
   const extras = active.filter((service) => service.categoryId === "misc").slice(0, 3);

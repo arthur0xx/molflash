@@ -2,12 +2,12 @@ import { notFound } from "next/navigation";
 import { Check, Clock3, ShieldCheck } from "lucide-react";
 import { BottomNav, Header } from "@/components/header";
 import { RequestForm } from "@/components/request-form";
-import { getSnapshot } from "@/lib/repository";
+import { getStorefrontSnapshot } from "@/lib/repository";
 import { formatMAD } from "@/lib/types";
 
 export default async function ServicePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const snapshot = await getSnapshot();
+  const snapshot = await getStorefrontSnapshot();
   const service = snapshot.services.find((item) => item.slug === slug);
   if (!service) notFound();
   const category = snapshot.categories.find((item) => item.id === service.categoryId);

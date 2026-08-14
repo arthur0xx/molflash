@@ -1,8 +1,8 @@
 import { BottomNav, Header } from "@/components/header";
 import { CartConsole } from "@/components/cart-console";
-import { getSnapshot } from "@/lib/repository";
+import { getStorefrontSnapshot } from "@/lib/repository";
 
 export default async function CartPage() {
-  const snapshot = await getSnapshot();
+  const snapshot = await getStorefrontSnapshot();
   return <><Header /><CartConsole services={snapshot.services} /><BottomNav /></>;
 }
