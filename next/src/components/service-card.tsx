@@ -7,7 +7,7 @@ export function ServiceCard({ service, categoryName }: { service: Service; categ
     <article className="service-card">
       <Link href={`/service/${service.slug}`} aria-label={`عرض تفاصيل ${service.title}`} className="service-card-link">
         <div className="service-card-top">
-          {service.imageUrl ? <img className="service-image" src={service.imageUrl} alt=""/> : <span className="service-glyph">{service.title.slice(0, 2).toUpperCase()}</span>}
+          {service.imageUrl ? <img className="service-image" src={service.imageUrl} alt={`صورة ${service.title}`}/> : <span className="service-glyph" aria-hidden="true">{service.title.slice(0, 2).toUpperCase()}</span>}
           {service.badge && <span className="tag tag-blue">{service.badge}</span>}
         </div>
         <p className="eyebrow">{categoryName || "خدمة رقمية"}</p>
