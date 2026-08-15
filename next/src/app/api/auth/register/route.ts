@@ -34,6 +34,7 @@ export async function POST(request: NextRequest) {
         fullName: parsed.data.fullName,
         phone: parsed.data.phone,
         role: "customer",
+        accountStatus: "active",
         walletMad: 0,
         avatarUrl: "",
         createdAt: now,

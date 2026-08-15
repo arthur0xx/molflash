@@ -9,7 +9,7 @@ export async function requireUser(request: NextRequest): Promise<DecodedIdToken 
   if (!token || !auth) return null;
 
   try {
-    return await auth.verifyIdToken(token);
+    return await auth.verifyIdToken(token, true);
   } catch {
     return null;
   }

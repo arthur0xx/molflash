@@ -14,7 +14,7 @@ const orderTone = (status: OrderStatus) => ({ new: "blue", processing: "amber", 
 const fieldLabels: Record<string, string> = { email: "البريد الإلكتروني", imei: "IMEI", model: "موديل الجهاز", serial: "Serial Number", username: "اسم المستخدم", plan: "الباقة", duration: "مدة الكراء", game: "اللعبة", playerId: "Player ID" };
 type CustomerProfile = { id: string; fullName: string; phone: string; email: string; walletMad: number };
 type AccountOrder = { id: string; customerId: string; customerName: string; customerPhone: string; customerEmail: string; serviceId: string; serviceTitle: string; totalMad: number; status: OrderStatus; createdAt: string; updatedAt: string; answers: Record<string, string>; deliveryCode?: string; deliveryNote?: string; statusHistory: Array<{ status: OrderStatus; at: string; note: string }>; notification?: OrderNotification };
-type AccountState = "loading" | "signed-out" | "ready" | "error";
+type AccountState = "loading" | "signed-out" | "blocked" | "ready" | "error";
 
 function asString(value: unknown, fallback = "") { return typeof value === "string" ? value : fallback; }
 function asNumber(value: unknown, fallback = 0) { return typeof value === "number" ? value : fallback; }
@@ -52,13 +52,19 @@ export function AccountConsole() {
   useEffect(() => {
     if (!firebase) return;
     return onAuthStateChanged(firebase.auth, async (user) => {
-      if (!user) { setAccountState("signed-out"); setCustomer(null); setOrders([]); return; }
+      if (!user) { setAccountState((current) => current === "blocked" ? "blocked" : "signed-out"); setCustomer(null); setOrders([]); return; }
       if (!user.emailVerified) { router.replace("/verify-email?next=/account"); return; }
       setAccountState("loading");
       try {
         const customerSnapshot = await getDoc(doc(firebase.db, "customers", user.uid));
         if (!customerSnapshot.exists()) throw new Error("لم يُعثر على ملف العميل لهذا الحساب.");
         const rawCustomer = customerSnapshot.data() as Record<string, unknown>;
+        if (rawCustomer.accountStatus === "blocked") {
+          setAccountState("blocked");
+          setError("تم إيقاف هذا الحساب مؤقتًا. تواصل مع الدعم إذا كنت تحتاج إلى مراجعة الحالة.");
+          await firebase.auth.signOut().catch(() => undefined);
+          return;
+        }
         const profile: CustomerProfile = { id: user.uid, fullName: asString(rawCustomer.fullName, user.displayName || "عميل ChriGsm"), phone: asString(rawCustomer.phone, user.phoneNumber || ""), email: asString(rawCustomer.email, user.email || ""), walletMad: asNumber(rawCustomer.walletMad) };
         const orderSnapshot = await getDocs(query(collection(firebase.db, "orders"), where("customerId", "==", user.uid)));
         const loadedOrders = await Promise.all(orderSnapshot.docs.map(async (orderDoc) => {
@@ -122,6 +128,7 @@ export function AccountConsole() {
 
   if (accountState === "loading") return <main className="store-shell account-shell"><section className="account-panel"><p className="eyebrow">منطقة العميل</p><h1>جارٍ فتح حسابك…</h1><p className="panel-intro">نحضّر معلوماتك وطلباتك بأمان.</p></section></main>;
   if (accountState === "signed-out") return <main className="store-shell account-shell"><section className="account-panel"><p className="eyebrow">منطقة العميل</p><h1>سجّل الدخول لعرض طلباتك</h1><p className="panel-intro">ستجد رصيدك وطلباتك ورسائل الدعم في مكان واحد.</p><Link className="primary-button" href="/login?next=/account">تسجيل الدخول</Link></section></main>;
+  if (accountState === "blocked") return <main className="store-shell account-shell"><section className="account-panel"><p className="eyebrow">حالة الحساب</p><h1>الحساب موقوف مؤقتًا</h1><p className="panel-intro">{error || "لا يمكن استخدام الحساب حاليًا. تواصل مع فريق الدعم لمراجعة الحالة."}</p><Link className="primary-button" href="/login">العودة لتسجيل الدخول</Link></section></main>;
   if (accountState === "error" || !customer) return <main className="store-shell account-shell"><section className="account-panel"><p className="eyebrow">تعذر فتح الحساب</p><h1>لا يمكن تحميل بيانات الحساب</h1><p className="panel-intro">{error}</p><Link className="primary-button" href="/login?next=/account">العودة لتسجيل الدخول</Link></section></main>;
 
   return <main className="store-shell account-shell">

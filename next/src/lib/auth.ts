@@ -8,6 +8,7 @@ export type AuthSession = { uid: string; role: Role; fullName: string; phone: st
 export type PasswordResetResult = "sent" | "invalid-email" | "unavailable";
 export type RegistrationResult = "created" | "email-in-use" | "weak-password" | "invalid-email" | "verification-unavailable" | "unavailable";
 export type VerificationResult = "sent" | "already-verified" | "unavailable";
+export type GoogleSignInResult = "signed-in" | "existing-account" | "unavailable";
 
 type FirebaseUserLike = {
   uid: string;
@@ -33,11 +34,11 @@ function validEmail(value: string) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(va
 
 async function authModules() {
   const [
-    { applyActionCode, confirmPasswordReset, createUserWithEmailAndPassword, deleteUser, getIdTokenResult, onAuthStateChanged, reload, signInWithEmailAndPassword, signOut, updateProfile, verifyPasswordResetCode },
+    { GoogleAuthProvider, applyActionCode, confirmPasswordReset, createUserWithEmailAndPassword, deleteUser, getAdditionalUserInfo, getIdTokenResult, onAuthStateChanged, reload, signInWithEmailAndPassword, signInWithPopup, signOut, updateProfile, verifyPasswordResetCode },
     { doc, getDoc },
     { firebaseServices },
   ] = await Promise.all([import("firebase/auth"), import("firebase/firestore"), import("@/lib/firebase/client")]);
-  return { applyActionCode, confirmPasswordReset, createUserWithEmailAndPassword, deleteUser, getIdTokenResult, onAuthStateChanged, reload, signInWithEmailAndPassword, signOut, updateProfile, verifyPasswordResetCode, doc, getDoc, firebaseServices };
+  return { GoogleAuthProvider, applyActionCode, confirmPasswordReset, createUserWithEmailAndPassword, deleteUser, getAdditionalUserInfo, getIdTokenResult, onAuthStateChanged, reload, signInWithEmailAndPassword, signInWithPopup, signOut, updateProfile, verifyPasswordResetCode, doc, getDoc, firebaseServices };
 }
 
 async function firebaseSession(user: FirebaseUserLike): Promise<AuthSession> {
@@ -119,6 +120,39 @@ export async function signIn(email: string, password: string): Promise<AuthSessi
     persist(session);
     return session;
   } catch { return null; }
+}
+
+export async function signInWithGoogle(): Promise<GoogleSignInResult> {
+  const { GoogleAuthProvider, deleteUser, firebaseServices, getAdditionalUserInfo, signInWithPopup, signOut: firebaseSignOut } = await authModules();
+  const services = firebaseServices();
+  if (!services) return "unavailable";
+
+  try {
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: "select_account" });
+    const credential = await signInWithPopup(services.auth, provider);
+    const user = credential.user as FirebaseUserLike;
+    const token = await user.getIdToken();
+    const response = await fetch("/api/auth/register", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+      body: JSON.stringify({ fullName: user.displayName?.trim() || user.email?.split("@")[0] || "عميل ChriGsm", phone: "" }),
+    });
+
+    if (!response.ok) {
+      const details = getAdditionalUserInfo(credential);
+      if (details?.isNewUser) await deleteUser(credential.user).catch(() => undefined);
+      await firebaseSignOut(services.auth).catch(() => undefined);
+      return "unavailable";
+    }
+
+    persist(await firebaseSession(user));
+    return "signed-in";
+  } catch (reason) {
+    const code = typeof reason === "object" && reason && "code" in reason ? String(reason.code) : "";
+    if (code === "auth/account-exists-with-different-credential") return "existing-account";
+    return "unavailable";
+  }
 }
 
 export async function registerCustomer(fullName: string, phone: string, email: string, password: string): Promise<RegistrationResult> {

@@ -62,6 +62,8 @@ export async function sendPasswordResetEmailForAddress(email: string): Promise<"
   if (!auth || !settings) return "unavailable";
 
   try {
+    const user = await auth.getUserByEmail(email);
+    if (user.disabled) return "sent";
     const firebaseActionUrl = await auth.generatePasswordResetLink(email, settings);
     await sendAuthEmail({ to: email, actionUrl: customActionUrl(firebaseActionUrl), kind: "reset" });
     return "sent";

@@ -4,6 +4,11 @@ service cloud.firestore {
     function signedIn() { return request.auth != null; }
     function admin() { return signedIn() && request.auth.token.role == 'admin'; }
     function ownsCustomer(customerId) { return signedIn() && request.auth.uid == customerId; }
+    function activeCustomer() {
+      let customer = get(/databases/$(database)/documents/customers/$(request.auth.uid)).data;
+      return signedIn() && (!('accountStatus' in customer) || customer.accountStatus != 'blocked');
+    }
+    function activeOwner(customerId) { return ownsCustomer(customerId) && activeCustomer(); }
 
     match /categories/{categoryId} {
       allow read: if true;
@@ -16,20 +21,20 @@ service cloud.firestore {
       allow write: if false;
     }
     match /customers/{customerId} {
-      allow read: if admin() || ownsCustomer(customerId);
+      allow read: if admin() || activeOwner(customerId);
       // تعديلات الرصيد تتم ذريًا في مسار خادمي يضيف قيد محفظة وسجل تدقيق؛ لا كتابة مباشرة من العميل حتى للمدير.
       allow write: if false;
     }
     match /orders/{orderId} {
-      allow read: if admin() || (signedIn() && resource.data.customerId == request.auth.uid);
+      allow read: if admin() || (activeCustomer() && resource.data.customerId == request.auth.uid);
       allow write: if false;
     }
     match /walletEntries/{entryId} {
-      allow read: if admin() || (signedIn() && resource.data.customerId == request.auth.uid);
+      allow read: if admin() || (activeCustomer() && resource.data.customerId == request.auth.uid);
       allow write: if false;
     }
     match /supportTickets/{ticketId} {
-      allow read: if admin() || (signedIn() && resource.data.customerId == request.auth.uid);
+      allow read: if admin() || (activeCustomer() && resource.data.customerId == request.auth.uid);
       // الرسائل والردود تمر عبر مسارات خادمية تتحقق من الهوية وتسجل التدقيق؛ لا كتابة مباشرة.
       allow write: if false;
     }

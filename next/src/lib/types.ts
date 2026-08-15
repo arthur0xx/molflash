@@ -46,6 +46,9 @@ export interface Customer {
   whatsappEnabled: boolean;
   avatarUrl?: string;
   avatarPublicId?: string;
+  accountStatus?: "active" | "blocked";
+  blockedAt?: string;
+  blockedReason?: string;
 }
 
 export interface CustomerProfile {
