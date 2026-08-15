@@ -31,23 +31,13 @@ function persist(session: AuthSession | null) {
 export function normalizedEmail(value: string) { return value.trim().toLowerCase(); }
 function validEmail(value: string) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value); }
 
-function appUrl() {
-  const value = process.env.NEXT_PUBLIC_APP_URL;
-  return value && /^https:\/\/[^/?#]+$/i.test(value) ? value : null;
-}
-
-function actionCodeSettings(continuePath: string) {
-  const baseUrl = appUrl();
-  return baseUrl ? { url: `${baseUrl}${continuePath}`, handleCodeInApp: false } : null;
-}
-
 async function authModules() {
   const [
-    { applyActionCode, confirmPasswordReset, createUserWithEmailAndPassword, deleteUser, getIdTokenResult, onAuthStateChanged, reload, sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, updateProfile, verifyPasswordResetCode },
+    { applyActionCode, confirmPasswordReset, createUserWithEmailAndPassword, deleteUser, getIdTokenResult, onAuthStateChanged, reload, signInWithEmailAndPassword, signOut, updateProfile, verifyPasswordResetCode },
     { doc, getDoc },
     { firebaseServices },
   ] = await Promise.all([import("firebase/auth"), import("firebase/firestore"), import("@/lib/firebase/client")]);
-  return { applyActionCode, confirmPasswordReset, createUserWithEmailAndPassword, deleteUser, getIdTokenResult, onAuthStateChanged, reload, sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, updateProfile, verifyPasswordResetCode, doc, getDoc, firebaseServices };
+  return { applyActionCode, confirmPasswordReset, createUserWithEmailAndPassword, deleteUser, getIdTokenResult, onAuthStateChanged, reload, signInWithEmailAndPassword, signOut, updateProfile, verifyPasswordResetCode, doc, getDoc, firebaseServices };
 }
 
 async function firebaseSession(user: FirebaseUserLike): Promise<AuthSession> {
@@ -69,6 +59,22 @@ async function firebaseSession(user: FirebaseUserLike): Promise<AuthSession> {
     // لا يمنح تعذر قراءة الملف أي صلاحية إدارية.
   }
   return { uid: user.uid, role, fullName, phone, email: user.email || "", emailVerified: user.emailVerified, signedInAt: new Date().toISOString() };
+}
+
+async function requestCustomVerificationEmail(user: FirebaseUserLike): Promise<VerificationResult> {
+  if (user.emailVerified) return "already-verified";
+  try {
+    const token = await user.getIdToken();
+    const response = await fetch("/api/auth/send-verification", {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    if (!response.ok) return "unavailable";
+    const body = await response.json().catch(() => null) as { status?: string } | null;
+    return body?.status === "already-verified" ? "already-verified" : "sent";
+  } catch {
+    return "unavailable";
+  }
 }
 
 function startFirebaseObserver() {
@@ -121,10 +127,9 @@ export async function registerCustomer(fullName: string, phone: string, email: s
   if (!validEmail(normalized)) return "invalid-email";
   if (name.length < 2 || password.length < 8) return "weak-password";
 
-  const { createUserWithEmailAndPassword, deleteUser, firebaseServices, sendEmailVerification, signOut, updateProfile } = await authModules();
+  const { createUserWithEmailAndPassword, deleteUser, firebaseServices, signOut, updateProfile } = await authModules();
   const services = firebaseServices();
-  const settings = actionCodeSettings("/account");
-  if (!services || !settings) return "unavailable";
+  if (!services) return "unavailable";
   try {
     const credential = await createUserWithEmailAndPassword(services.auth, normalized, password);
     await updateProfile(credential.user, { displayName: name });
@@ -136,11 +141,8 @@ export async function registerCustomer(fullName: string, phone: string, email: s
       return "unavailable";
     }
     persist(await firebaseSession(credential.user as FirebaseUserLike));
-    try {
-      services.auth.languageCode = "ar";
-      await sendEmailVerification(credential.user, settings);
-      return "created";
-    } catch { return "verification-unavailable"; }
+    const verification = await requestCustomVerificationEmail(credential.user as FirebaseUserLike);
+    return verification === "sent" || verification === "already-verified" ? "created" : "verification-unavailable";
   } catch (reason) {
     const code = typeof reason === "object" && reason && "code" in reason ? String(reason.code) : "";
     if (code === "auth/email-already-in-use") return "email-in-use";
@@ -151,17 +153,9 @@ export async function registerCustomer(fullName: string, phone: string, email: s
 }
 
 export async function sendVerificationEmail(): Promise<VerificationResult> {
-  const { firebaseServices, sendEmailVerification } = await authModules();
-  const services = firebaseServices();
-  const settings = actionCodeSettings("/account");
-  const user = services?.auth.currentUser;
-  if (!user || !settings) return "unavailable";
-  if (user.emailVerified) return "already-verified";
-  try {
-    services.auth.languageCode = "ar";
-    await sendEmailVerification(user, settings);
-    return "sent";
-  } catch { return "unavailable"; }
+  const { firebaseServices } = await authModules();
+  const user = firebaseServices()?.auth.currentUser;
+  return user ? requestCustomVerificationEmail(user as FirebaseUserLike) : "unavailable";
 }
 
 export async function completeEmailVerification(actionCode: string): Promise<"verified" | "invalid"> {
@@ -201,17 +195,14 @@ export async function completePasswordReset(actionCode: string, password: string
 export async function requestPasswordReset(email: string): Promise<PasswordResetResult> {
   const normalized = normalizedEmail(email);
   if (!validEmail(normalized)) return "invalid-email";
-  const settings = actionCodeSettings("/login");
-  const { firebaseServices, sendPasswordResetEmail } = await authModules();
-  const services = firebaseServices();
-  if (!services || !settings) return "unavailable";
   try {
-    services.auth.languageCode = "ar";
-    await sendPasswordResetEmail(services.auth, normalized, settings);
-    return "sent";
-  } catch (reason) {
-    const code = typeof reason === "object" && reason && "code" in reason ? String(reason.code) : "";
-    if (code === "auth/user-not-found" || code === "auth/invalid-credential") return "sent";
+    const response = await fetch("/api/auth/password-reset", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email: normalized }),
+    });
+    return response.ok ? "sent" : "unavailable";
+  } catch {
     return "unavailable";
   }
 }
