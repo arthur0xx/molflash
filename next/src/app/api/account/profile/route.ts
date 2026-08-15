@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { adminDb } from "@/lib/firebase/admin";
-import { requireUser } from "@/lib/api/admin-auth";
+import { requireVerifiedUser } from "@/lib/api/admin-auth";
 import { deleteCloudinaryImage } from "@/lib/cloudinary";
 import type { CustomerProfile } from "@/lib/types";
 
@@ -39,11 +39,11 @@ function cleanupAvatarAsset(publicId: string) {
 }
 
 export async function PATCH(request: NextRequest) {
-  const user = await requireUser(request);
+  const user = await requireVerifiedUser(request);
   if (!user) return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
 
   const db = adminDb();
-  if (!db) return NextResponse.json({ error: "إعداد Firebase الخادمي غير مكتمل" }, { status: 503 });
+  if (!db) return NextResponse.json({ error: "خدمة الحساب غير متاحة حاليًا" }, { status: 503 });
 
   try {
     const body = await request.json() as Record<string, unknown>;

@@ -112,7 +112,7 @@ export interface SupportTicket {
   reply?: SupportReply;
 }
 
-export interface DemoSnapshot {
+export interface StoreSnapshot {
   categories: Category[];
   services: Service[];
   customers: Customer[];

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { adminDb } from "@/lib/firebase/admin";
-import { requireUser } from "@/lib/api/admin-auth";
+import { requireVerifiedUser } from "@/lib/api/admin-auth";
 import type { DynamicField } from "@/lib/types";
 
 const createOrderSchema = z.object({
@@ -32,11 +32,11 @@ function validateFormData(input: Record<string, string>, fields: DynamicField[])
 }
 
 export async function POST(request: NextRequest) {
-  const user = await requireUser(request);
-  if (!user) return NextResponse.json({ error: "سجّل الدخول أولًا" }, { status: 401 });
+  const user = await requireVerifiedUser(request);
+  if (!user) return NextResponse.json({ error: "أكد بريدك الإلكتروني ثم سجّل الدخول لإرسال الطلب" }, { status: 401 });
 
   const db = adminDb();
-  if (!db) return NextResponse.json({ error: "إعداد Firebase الخادمي غير مكتمل" }, { status: 503 });
+  if (!db) return NextResponse.json({ error: "خدمة الطلبات غير متاحة حاليًا" }, { status: 503 });
 
   try {
     const parsed = createOrderSchema.safeParse(await request.json());

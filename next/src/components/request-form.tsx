@@ -20,7 +20,7 @@ export function RequestForm({ service }: { service: Service }) {
     const services = firebaseServices();
 
     if (!services) {
-      setError("إنشاء الطلب غير متاح لأن اتصال Firebase غير مكتمل.");
+      setError("إنشاء الطلب غير متاح حاليًا. حاول مرة أخرى لاحقًا.");
       setSubmitting(false);
       return;
     }

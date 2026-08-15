@@ -4,7 +4,6 @@ import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import db from './db.js';
-import seed from './seed.js';
 import authRoutes from './routes/auth.js';
 import publicRoutes from './routes/public.js';
 import orderRoutes from './routes/orders.js';
@@ -18,8 +17,6 @@ const allowedOrigins = String(process.env.CORS_ORIGIN || '')
 if (isProduction && !allowedOrigins.length) {
   throw new Error('CORS_ORIGIN مطلوب عند تشغيل chrigsm في بيئة الإنتاج');
 }
-seed();
-
 const app = express();
 app.use(cors({
   origin(origin, callback) {

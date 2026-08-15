@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { adminDb } from "@/lib/firebase/admin";
-import { requireUser } from "@/lib/api/admin-auth";
+import { requireVerifiedUser } from "@/lib/api/admin-auth";
 import type { SupportTicket } from "@/lib/types";
 
 const createTicketSchema = z.object({
@@ -27,11 +27,11 @@ function serializeTicket(id: string, raw: Record<string, unknown>): SupportTicke
 }
 
 export async function GET(request: NextRequest) {
-  const user = await requireUser(request);
+  const user = await requireVerifiedUser(request);
   if (!user) return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
 
   const db = adminDb();
-  if (!db) return NextResponse.json({ error: "إعداد Firebase الخادمي غير مكتمل" }, { status: 503 });
+  if (!db) return NextResponse.json({ error: "خدمة الدعم غير متاحة حاليًا" }, { status: 503 });
 
   try {
     const snapshot = await db.collection("supportTickets").where("customerId", "==", user.uid).get();
@@ -46,11 +46,11 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const user = await requireUser(request);
+  const user = await requireVerifiedUser(request);
   if (!user) return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
 
   const db = adminDb();
-  if (!db) return NextResponse.json({ error: "إعداد Firebase الخادمي غير مكتمل" }, { status: 503 });
+  if (!db) return NextResponse.json({ error: "خدمة الدعم غير متاحة حاليًا" }, { status: 503 });
 
   try {
     const parsed = createTicketSchema.safeParse(await request.json());

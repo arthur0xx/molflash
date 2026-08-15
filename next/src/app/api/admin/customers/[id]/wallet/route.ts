@@ -14,7 +14,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   if (!admin) return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
 
   const db = adminDb();
-  if (!db) return NextResponse.json({ error: "إعداد Firebase الخادمي غير مكتمل" }, { status: 503 });
+  if (!db) return NextResponse.json({ error: "خدمة تعديل الرصيد غير متاحة حاليًا" }, { status: 503 });
 
   try {
     const { id } = await context.params;

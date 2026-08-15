@@ -1,38 +1,29 @@
-import { demoSnapshot } from "./demo-data";
 import { adminDb } from "./firebase/admin";
-import type { DemoSnapshot, OrderStatus } from "./types";
+import type { OrderStatus, StoreSnapshot } from "./types";
 
-export type StorefrontSnapshot = Pick<DemoSnapshot, "categories" | "services">;
+export type StorefrontSnapshot = Pick<StoreSnapshot, "categories" | "services">;
 
-function demoStorefrontSnapshot(): StorefrontSnapshot {
-  return {
-    categories: demoSnapshot.categories.filter((category) => category.isActive),
-    services: demoSnapshot.services.filter((service) => service.isActive),
-  };
-}
+const emptySnapshot: StoreSnapshot = { categories: [], services: [], customers: [], orders: [], walletEntries: [] };
 
-/** Reads only catalog data for public storefront pages. */
+/** Reads only active catalog data for public storefront pages. */
 export async function getStorefrontSnapshot(): Promise<StorefrontSnapshot> {
   const db = adminDb();
-  if (!db) return demoStorefrontSnapshot();
+  if (!db) return { categories: [], services: [] };
 
   const [categories, services] = await Promise.all([
     db.collection("categories").orderBy("order").get(),
     db.collection("services").orderBy("title").get(),
   ]);
 
-  const publicCategories = categories.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as StorefrontSnapshot["categories"];
-  const publicServices = services.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as StorefrontSnapshot["services"];
-  return {
-    categories: publicCategories.filter((category) => category.isActive),
-    services: publicServices.filter((service) => service.isActive),
-  };
+  const publicCategories = categories.docs.map((document) => ({ id: document.id, ...document.data() })) as StorefrontSnapshot["categories"];
+  const publicServices = services.docs.map((document) => ({ id: document.id, ...document.data() })) as StorefrontSnapshot["services"];
+  return { categories: publicCategories.filter((category) => category.isActive), services: publicServices.filter((service) => service.isActive) };
 }
 
 /** Reads the full operational snapshot for the protected CMC server page only. */
-export async function getSnapshot(): Promise<DemoSnapshot> {
+export async function getSnapshot(): Promise<StoreSnapshot> {
   const db = adminDb();
-  if (!db) return demoSnapshot;
+  if (!db) return emptySnapshot;
 
   const [categories, services, customers, orders, walletEntries] = await Promise.all([
     db.collection("categories").orderBy("order").get(),
@@ -43,11 +34,11 @@ export async function getSnapshot(): Promise<DemoSnapshot> {
   ]);
 
   return {
-    categories: categories.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as DemoSnapshot["categories"],
-    services: services.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as DemoSnapshot["services"],
-    customers: customers.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as DemoSnapshot["customers"],
-    orders: orders.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as DemoSnapshot["orders"],
-    walletEntries: walletEntries.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as DemoSnapshot["walletEntries"],
+    categories: categories.docs.map((document) => ({ id: document.id, ...document.data() })) as StoreSnapshot["categories"],
+    services: services.docs.map((document) => ({ id: document.id, ...document.data() })) as StoreSnapshot["services"],
+    customers: customers.docs.map((document) => ({ id: document.id, ...document.data() })) as StoreSnapshot["customers"],
+    orders: orders.docs.map((document) => ({ id: document.id, ...document.data() })) as StoreSnapshot["orders"],
+    walletEntries: walletEntries.docs.map((document) => ({ id: document.id, ...document.data() })) as StoreSnapshot["walletEntries"],
   };
 }
 

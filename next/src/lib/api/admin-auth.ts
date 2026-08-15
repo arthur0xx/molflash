@@ -15,6 +15,13 @@ export async function requireUser(request: NextRequest): Promise<DecodedIdToken 
   }
 }
 
+export async function requireVerifiedUser(request: NextRequest): Promise<DecodedIdToken | null> {
+  const decoded = await requireUser(request);
+  if (!decoded) return null;
+  // تبقى حسابات الإدارة قادرة على إدارة المتجر حتى لو كانت حالة بريدها القديمة غير متاحة في الرمز.
+  return decoded.role === "admin" || decoded.email_verified === true ? decoded : null;
+}
+
 export async function requireAdmin(request: NextRequest): Promise<DecodedIdToken | null> {
   const decoded = await requireUser(request);
   if (!decoded) return null;
