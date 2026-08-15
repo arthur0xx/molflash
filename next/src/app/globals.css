@@ -163,3 +163,17 @@
 .media-image-control.profile .media-image-preview{border-radius:50%;border:3px solid #dceaff;background:linear-gradient(145deg,#edf5ff,#d8e9ff);color:#1768cf}
 .media-image-control.profile .media-image-preview svg{width:46%;height:46%;stroke-width:1.8}
 @media(max-width:600px){.account-identity{width:100%;gap:11px}.account-avatar.hero{width:64px;height:64px}.account-hero .wallet-hero{width:100%}.media-image-control.profile{grid-template-columns:86px minmax(0,1fr)}.media-image-control.profile .media-image-preview{width:86px;height:86px}}
+
+/* CMC editor hardening across viewport sizes */
+.dialog-backdrop{box-sizing:border-box;overflow-y:auto;overscroll-behavior:contain}
+.editor-dialog{box-sizing:border-box;min-width:0;isolation:isolate}
+.editor-dialog h2{overflow-wrap:anywhere;line-height:1.35}
+.editor-grid,.editor-field,.editor-field>*{min-width:0}
+.editor-field>span{display:block;overflow-wrap:anywhere;line-height:1.4}
+.editor-field input,.editor-field select,.editor-field textarea{box-sizing:border-box;max-width:100%;min-width:0;overflow-wrap:anywhere}
+.editor-field input[type="url"],.editor-field input[dir="ltr"]{text-align:left;direction:ltr}
+.editor-dialog>div:last-child{align-items:stretch;flex-wrap:wrap}
+.editor-dialog>div:last-child button{min-height:44px;white-space:normal}
+@media(min-width:601px){.editor-dialog{border-radius:20px}.editor-dialog>.editor-grid{padding-bottom:2px}.editor-dialog>div:last-child{justify-content:flex-start}.editor-dialog>div:last-child button{min-width:132px}}
+@media(max-width:600px){.dialog-backdrop{padding:0;align-items:end}.editor-dialog{width:100%;max-width:100%;max-height:calc(100dvh - 8px);min-height:0;border-radius:20px 20px 0 0}.editor-dialog>.editor-grid{margin-top:14px}.editor-field input,.editor-field select,.editor-field textarea{width:100%;font-size:16px}.editor-dialog>div:last-child{gap:9px}.editor-dialog>div:last-child button{flex:1;min-height:48px}.media-image-control{max-width:100%;overflow:hidden}}
+@media(max-width:360px){.editor-dialog{padding-right:12px;padding-left:12px}.editor-dialog>div:last-child{margin-right:-12px;margin-left:-12px;padding-right:12px;padding-left:12px}.editor-dialog h2{font-size:22px}.editor-field input,.editor-field select,.editor-field textarea{font-size:16px}.media-image-control{grid-template-columns:76px minmax(0,1fr);gap:8px;padding:9px}.media-image-control .media-image-preview{width:76px;height:76px}.media-image-actions small{font-size:10px}}
