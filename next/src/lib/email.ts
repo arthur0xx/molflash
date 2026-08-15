@@ -10,6 +10,17 @@ type AuthEmailInput = {
   kind: AuthEmailKind;
 };
 
+type EmailCopy = {
+  subject: string;
+  preview: string;
+  eyebrow: string;
+  heading: string;
+  introduction: string;
+  actionLabel: string;
+  securityNote: string;
+  ignoreNotice: string;
+};
+
 function smtpConfiguration() {
   const user = process.env.GMAIL_SMTP_USER?.trim();
   const password = process.env.GMAIL_SMTP_APP_PASSWORD?.replace(/\s/g, "");
@@ -32,32 +43,108 @@ function escapeHtml(value: string) {
   })[character] || character);
 }
 
-function emailContent(kind: AuthEmailKind, actionUrl: string) {
-  const isVerification = kind === "verify";
-  const subject = isVerification ? "فعّل بريدك الإلكتروني في ChriGsm" : "أعد تعيين كلمة مرور ChriGsm";
-  const heading = isVerification ? "أكّد بريدك الإلكتروني" : "إعادة تعيين كلمة المرور";
-  const introduction = isVerification
-    ? "مرحبًا، شكرًا لإنشاء حسابك في ChriGsm. أكّد بريدك الإلكتروني لتفعيل حسابك." 
-    : "وردنا طلب لإعادة تعيين كلمة مرور حسابك في ChriGsm.";
-  const actionLabel = isVerification ? "تفعيل البريد الإلكتروني" : "تعيين كلمة مرور جديدة";
-  const ignoreNotice = isVerification
-    ? "إذا لم تنشئ حسابًا في ChriGsm، يمكنك تجاهل هذه الرسالة بأمان."
-    : "إذا لم تطلب إعادة التعيين، يمكنك تجاهل هذه الرسالة بأمان؛ لن تتغير كلمة المرور.";
-  const safeUrl = escapeHtml(actionUrl);
+function emailCopy(kind: AuthEmailKind): EmailCopy {
+  if (kind === "verify") {
+    return {
+      subject: "ChriGsm | فعّل بريدك الإلكتروني",
+      preview: "خطوة واحدة لتفعيل حسابك والوصول إليه بأمان.",
+      eyebrow: "تفعيل الحساب",
+      heading: "أكّد بريدك الإلكتروني",
+      introduction: "شكرًا لانضمامك إلى ChriGsm. أكّد بريدك الإلكتروني الآن حتى يصبح حسابك جاهزًا للاستخدام.",
+      actionLabel: "تفعيل البريد الإلكتروني",
+      securityNote: "لن نطلب منك كلمة المرور عبر البريد الإلكتروني. استخدم الزر أدناه فقط إذا أنشأت هذا الحساب.",
+      ignoreNotice: "إن لم تنشئ حسابًا في ChriGsm، يمكنك تجاهل هذه الرسالة بأمان.",
+    };
+  }
 
   return {
-    subject,
-    text: `${introduction}\n\n${actionLabel}: ${actionUrl}\n\n${ignoreNotice}\n\nفريق ChriGsm`,
+    subject: "ChriGsm | أعد تعيين كلمة مرورك",
+    preview: "استخدم هذا الرابط الآمن لاختيار كلمة مرور جديدة لحسابك.",
+    eyebrow: "حماية الحساب",
+    heading: "إعادة تعيين كلمة المرور",
+    introduction: "تلقينا طلبًا لإعادة تعيين كلمة مرور حسابك. اختر كلمة مرور جديدة وآمنة من خلال الزر أدناه.",
+    actionLabel: "تعيين كلمة مرور جديدة",
+    securityNote: "لم نغيّر أي شيء في حسابك. لا تشارك هذا الزر أو الرسالة مع أي شخص.",
+    ignoreNotice: "إذا لم تطلب إعادة التعيين، تجاهل هذه الرسالة ولن تتغير كلمة المرور.",
+  };
+}
+
+function emailContent(kind: AuthEmailKind, actionUrl: string) {
+  const copy = emailCopy(kind);
+  const safeUrl = escapeHtml(actionUrl);
+  const safeButtonLabel = escapeHtml(copy.actionLabel);
+
+  return {
+    subject: copy.subject,
+    text: `${copy.preview}\n\n${copy.introduction}\n\n${copy.actionLabel}: ${actionUrl}\n\n${copy.securityNote}\n\n${copy.ignoreNotice}\n\nفريق ChriGsm`,
     html: `<!doctype html>
 <html lang="ar" dir="rtl">
-  <body style="margin:0;background:#f6f8fb;color:#172033;font-family:Arial,Helvetica,sans-serif;line-height:1.75">
-    <main style="max-width:560px;margin:32px auto;padding:0 16px">
-      <section style="overflow:hidden;background:#ffffff;border:1px solid #e5eaf2;border-radius:18px;box-shadow:0 12px 28px rgba(23,32,51,.08)">
-        <header style="padding:26px 30px;background:#102a43;color:#ffffff"><p style="margin:0;font-size:13px;letter-spacing:.08em;text-transform:uppercase;opacity:.8">ChriGsm</p><h1 style="margin:8px 0 0;font-size:24px;line-height:1.35">${heading}</h1></header>
-        <div style="padding:30px"><p style="margin:0 0 22px">${introduction}</p><p style="margin:0 0 25px;text-align:center"><a href="${safeUrl}" style="display:inline-block;padding:13px 22px;border-radius:10px;background:#0f766e;color:#ffffff;text-decoration:none;font-weight:700">${actionLabel}</a></p><p style="margin:0 0 22px;font-size:13px;color:#526074">إن لم يعمل الزر، انسخ الرابط التالي وافتحه في المتصفح:</p><p style="margin:0 0 24px;word-break:break-all;font-size:12px"><a href="${safeUrl}" style="color:#0f766e">${safeUrl}</a></p><p style="margin:0;color:#526074;font-size:13px">${ignoreNotice}</p></div>
-      </section>
-      <p style="margin:16px 4px;color:#6b778a;font-size:12px;text-align:center">هذه رسالة تلقائية من ChriGsm. لا تشارك رابطك مع أي شخص.</p>
-    </main>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="x-apple-disable-message-reformatting" />
+    <title>${escapeHtml(copy.subject)}</title>
+  </head>
+  <body style="margin:0;padding:0;background:#f4f7fb;color:#1d2939;font-family:Arial,Helvetica,sans-serif;-webkit-text-size-adjust:100%;text-size-adjust:100%;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;margin:0;padding:0;background:#f4f7fb;">
+      <tr>
+        <td align="center" style="padding:28px 14px 34px;">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;max-width:600px;margin:0 auto;">
+            <tr>
+              <td style="padding:0 22px 14px;text-align:center;">
+                <span style="display:inline-block;border:1px solid #d8e2ef;border-radius:999px;background:#ffffff;color:#30445d;font-size:12px;font-weight:700;letter-spacing:.08em;padding:7px 14px;">CHRI<span style="color:#0f766e;">GSM</span></span>
+              </td>
+            </tr>
+            <tr>
+              <td style="overflow:hidden;border:1px solid #dfe7f1;border-radius:22px;background:#ffffff;box-shadow:0 12px 32px rgba(38,55,77,.10);">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                  <tr>
+                    <td style="padding:32px 32px 30px;background:#102a43;background:linear-gradient(135deg,#0f253c 0%,#183f58 100%);color:#ffffff;text-align:right;">
+                      <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                        <tr>
+                          <td style="width:42px;height:42px;border-radius:13px;background:#0f766e;color:#ffffff;font-size:17px;font-weight:800;text-align:center;vertical-align:middle;">CG</td>
+                          <td style="padding-right:12px;vertical-align:middle;">
+                            <p style="margin:0 0 3px;font-size:12px;font-weight:700;letter-spacing:.04em;color:#b7d9d7;">${escapeHtml(copy.eyebrow)}</p>
+                            <p style="margin:0;font-size:19px;font-weight:700;line-height:1.35;">ChriGsm</p>
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding:34px 32px 12px;text-align:right;">
+                      <p style="margin:0 0 13px;color:#0f766e;font-size:13px;font-weight:700;">${escapeHtml(copy.preview)}</p>
+                      <h1 style="margin:0 0 16px;color:#172b42;font-size:27px;line-height:1.42;font-weight:800;">${escapeHtml(copy.heading)}</h1>
+                      <p style="margin:0;color:#526477;font-size:16px;line-height:1.9;">${escapeHtml(copy.introduction)}</p>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td align="center" style="padding:25px 32px 27px;">
+                      <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" aria-label="${safeButtonLabel}" style="display:inline-block;border-radius:11px;background:#0f766e;color:#ffffff;font-size:16px;font-weight:700;line-height:1;text-decoration:none;padding:16px 26px;box-shadow:0 8px 18px rgba(15,118,110,.22);">${safeButtonLabel}</a>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding:0 32px 31px;">
+                      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border:1px solid #dcebe9;border-radius:12px;background:#f3faf9;">
+                        <tr>
+                          <td style="padding:14px 16px;color:#3e5d62;font-size:13px;line-height:1.75;text-align:right;">${escapeHtml(copy.securityNote)}</td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="border-top:1px solid #e7edf4;padding:18px 32px 22px;color:#708094;font-size:12px;line-height:1.75;text-align:right;">${escapeHtml(copy.ignoreNotice)}</td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:18px 24px 0;color:#8090a3;font-size:12px;line-height:1.75;text-align:center;">هذه رسالة تلقائية من ChriGsm لحماية حسابك. نستخدمها فقط للعمليات التي طلبتها.</td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
   </body>
 </html>`,
   };
@@ -75,10 +162,12 @@ export async function sendAuthEmail({ to, actionUrl, kind }: AuthEmailInput) {
     port: 465,
     secure: true,
     auth: { user: config.user, pass: config.password },
+    tls: { minVersion: "TLSv1.2" },
   });
   const content = emailContent(kind, parsedUrl.toString());
   const result = await transporter.sendMail({
     from: { name: config.senderName.replace(/[\r\n]/g, " "), address: config.user },
+    replyTo: config.user,
     to,
     subject: content.subject,
     text: content.text,
