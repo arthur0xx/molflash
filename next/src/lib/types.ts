@@ -31,6 +31,12 @@ export interface Service {
   badge?: string;
   imageUrl?: string;
   imagePublicId?: string;
+  /** Public catalogue metadata. Supplier cost and reference remain in server-only servicePrivate records. */
+  catalogFamily?: "unlock" | "timed-access" | "rental" | "tool" | "processing";
+  visualPreset?: string;
+  termValue?: number;
+  termUnit?: "days" | "months" | "years";
+  publicationStatus?: "draft" | "ready" | "published" | "paused";
   isActive: boolean;
   fields: DynamicField[];
 }

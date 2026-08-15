@@ -13,3 +13,7 @@ dist/
 
 # Generated static catalog used only during the GitHub Pages build
 frontend/public/static-api/
+
+# Read-only supplier catalog snapshots and local pricing analyses
+supplier-snapshots/
+next/firestore-debug.log

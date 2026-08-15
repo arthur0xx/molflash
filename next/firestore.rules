@@ -20,6 +20,10 @@ service cloud.firestore {
       // تتطلب جميع كتابات CMC تحققًا خادميًا وسجل تدقيق؛ لا كتابة مباشرة من العميل.
       allow write: if false;
     }
+    // مراجع المورد والكلفة والربحية لا تمر إلى العميل؛ تعدل فقط عبر Firebase Admin داخل المسارات الخادمية.
+    match /servicePrivate/{serviceId} {
+      allow read, write: if false;
+    }
     match /customers/{customerId} {
       allow read: if admin() || activeOwner(customerId);
       // تعديلات الرصيد تتم ذريًا في مسار خادمي يضيف قيد محفظة وسجل تدقيق؛ لا كتابة مباشرة من العميل حتى للمدير.

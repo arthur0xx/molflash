@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
-const serviceFolder = "chrigsm/services";
+const serviceFolder = "chrigsm/catalog";
+const legacyServiceFolder = "chrigsm/services";
 const profileFolder = "chrigsm/profiles";
 
 export type CloudinaryServerConfig = {
@@ -27,8 +28,9 @@ function safeAssetSegment(value: string, fallback: string) {
   return normalized || fallback;
 }
 
-export function serviceImagePublicId(title: string, serviceId: string) {
-  return `${serviceFolder}/${safeAssetSegment(title, "service")}-${safeAssetSegment(serviceId, "item")}`;
+export function serviceImagePublicId(title: string, serviceId: string, categoryId = "uncategorized") {
+  const category = safeAssetSegment(categoryId, "uncategorized");
+  return `${serviceFolder}/${category}/${safeAssetSegment(title, "service")}-${safeAssetSegment(serviceId, "item")}`;
 }
 
 export function profileImagePublicId(fullName: string, userId: string) {
@@ -36,8 +38,10 @@ export function profileImagePublicId(fullName: string, userId: string) {
 }
 
 function isManagedPublicId(publicId: string, kind?: MediaKind) {
-  const folder = kind === "service" ? serviceFolder : kind === "profile" ? profileFolder : "chrigsm/";
-  return publicId.startsWith(`${folder}/`) && /^[a-z0-9/_-]{5,220}$/.test(publicId);
+  const isServiceAsset = publicId.startsWith(`${serviceFolder}/`) || publicId.startsWith(`${legacyServiceFolder}/`);
+  const isProfileAsset = publicId.startsWith(`${profileFolder}/`);
+  const permitted = kind === "service" ? isServiceAsset : kind === "profile" ? isProfileAsset : publicId.startsWith("chrigsm/");
+  return permitted && /^[a-z0-9/_-]{5,220}$/.test(publicId);
 }
 
 export function getCloudinaryServerConfig(): CloudinaryServerConfig | null {
@@ -65,12 +69,15 @@ export function createCloudinaryUploadSignature(target: CloudinaryUploadTarget, 
   const config = getCloudinaryServerConfig();
   if (!config || !isManagedPublicId(target.publicId, target.kind)) return null;
 
-  const folder = target.kind === "service" ? serviceFolder : profileFolder;
+  const separator = target.publicId.lastIndexOf("/");
+  const folder = target.publicId.slice(0, separator);
+  const assetName = target.publicId.slice(separator + 1);
+  if (!folder || !assetName) return null;
   const parameters = {
     folder,
     invalidate: "true",
     overwrite: "true",
-    public_id: target.publicId.slice(`${folder}/`.length),
+    public_id: assetName,
     timestamp,
   };
 

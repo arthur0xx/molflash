@@ -24,6 +24,7 @@ export async function POST(request: NextRequest) {
 
   let stableId = `draft-${parsed.data.title}`;
   let title = parsed.data.title;
+  let categoryId = "drafts";
   if (parsed.data.serviceId) {
     const db = adminDb();
     if (!db) return NextResponse.json({ error: "إعداد Firebase الخادمي غير مكتمل" }, { status: 503 });
@@ -31,10 +32,11 @@ export async function POST(request: NextRequest) {
     if (!service.exists) return NextResponse.json({ error: "الخدمة غير موجودة" }, { status: 404 });
     stableId = service.id;
     title = String(service.data()?.title || title);
+    categoryId = String(service.data()?.categoryId || categoryId);
   }
 
   const timestamp = Math.floor(Date.now() / 1000);
-  const payload = createCloudinaryUploadSignature({ kind: "service", publicId: serviceImagePublicId(title, stableId) }, timestamp);
+  const payload = createCloudinaryUploadSignature({ kind: "service", publicId: serviceImagePublicId(title, stableId, categoryId) }, timestamp);
   if (!payload) return NextResponse.json({ error: "تهيئة Cloudinary الخادمية غير مكتملة" }, { status: 503 });
   return NextResponse.json(payload, { status: 201 });
 }

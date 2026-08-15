@@ -16,6 +16,7 @@ async function seed() {
     await setDoc(doc(database, "categories", "cat-live"), { name: "خدمات Server", isActive: true });
     await setDoc(doc(database, "services", "svc-live"), { title: "خدمة نشطة", isActive: true, categoryId: "cat-live" });
     await setDoc(doc(database, "services", "svc-hidden"), { title: "خدمة غير نشطة", isActive: false, categoryId: "cat-live" });
+    await setDoc(doc(database, "servicePrivate", "svc-live"), { supplierCostSnapshot: 12.5, sourceCurrency: "USD", supplierServiceId: "123" });
     await setDoc(doc(database, "customers", "customer-one"), { fullName: "العميل الأول", walletMad: 120 });
     await setDoc(doc(database, "customers", "customer-two"), { fullName: "العميل الثاني", walletMad: 80, accountStatus: "blocked" });
     await setDoc(doc(database, "orders", "order-one"), { customerId: "customer-one", serviceId: "svc-live" });
@@ -44,6 +45,7 @@ async function run() {
     await assertSucceeds(getDoc(doc(visitor, "categories", "cat-live")));
     await assertSucceeds(getDoc(doc(visitor, "services", "svc-live")));
     await assertFails(getDoc(doc(visitor, "services", "svc-hidden")));
+    await assertFails(getDoc(doc(visitor, "servicePrivate", "svc-live")));
     await assertFails(getDoc(doc(visitor, "customers", "customer-one")));
     await assertFails(getDoc(doc(visitor, "orders", "order-one")));
     await assertFails(getDoc(doc(visitor, "walletEntries", "wallet-one")));
@@ -63,6 +65,8 @@ async function run() {
     await assertFails(setDoc(doc(customerOne, "customers", "customer-one"), { walletMad: 9999 }, { merge: true }));
     await assertFails(setDoc(doc(customerOne, "walletEntries", "wallet-client-write"), { customerId: "customer-one", amountMad: 1, reason: "محاولة غير مصرح بها" }));
     await assertFails(setDoc(doc(customerOne, "services", "svc-client-write"), { isActive: true }));
+    await assertFails(getDoc(doc(customerOne, "servicePrivate", "svc-live")));
+    await assertFails(setDoc(doc(customerOne, "servicePrivate", "svc-live"), { supplierCostSnapshot: 0 }, { merge: true }));
 
     const blockedCustomer = environment.authenticatedContext("customer-two", { role: "customer" }).firestore();
     await assertFails(getDoc(doc(blockedCustomer, "customers", "customer-two")));
@@ -78,10 +82,12 @@ async function run() {
     await assertFails(setDoc(doc(adminClient, "supportTickets", "support-admin-direct"), { customerId: "customer-one", subject: "يجب أن يفشل" }));
     await assertFails(setDoc(doc(adminClient, "categories", "cat-admin-direct"), { name: "يجب أن يفشل" }));
     await assertFails(setDoc(doc(adminClient, "services", "svc-admin-direct"), { isActive: true }));
+    await assertFails(getDoc(doc(adminClient, "servicePrivate", "svc-live")));
+    await assertFails(setDoc(doc(adminClient, "servicePrivate", "svc-live"), { supplierCostSnapshot: 0 }, { merge: true }));
     await assertFails(setDoc(doc(adminClient, "customers", "customer-one"), { walletMad: 9999 }, { merge: true }));
     await assertFails(setDoc(doc(adminClient, "walletEntries", "wallet-admin-direct"), { customerId: "customer-one", amountMad: 1, reason: "يجب أن يفشل" }));
 
-    console.log("Firestore rules passed: visitor, customer isolation, blocked-account access, support tickets, and direct wallet/CMC writes are protected.");
+    console.log("Firestore rules passed: visitor, customer isolation, blocked-account access, support tickets, supplier costs, and direct wallet/CMC writes are protected.");
   } finally {
     await environment.cleanup();
   }
