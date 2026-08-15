@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import type { DecodedIdToken } from "firebase-admin/auth";
-import { adminAuth, adminDb } from "@/lib/firebase/admin";
+import { adminAuth } from "@/lib/firebase/admin";
 
 export async function requireUser(request: NextRequest): Promise<DecodedIdToken | null> {
   const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
@@ -18,21 +18,16 @@ export async function requireUser(request: NextRequest): Promise<DecodedIdToken 
 export async function requireVerifiedUser(request: NextRequest): Promise<DecodedIdToken | null> {
   const decoded = await requireUser(request);
   if (!decoded) return null;
-  // تبقى حسابات الإدارة قادرة على إدارة المتجر حتى لو كانت حالة بريدها القديمة غير متاحة في الرمز.
+  // حسابات الإدارة تعتمد Custom Claim موقّعًا، ولا تستخدم دورًا محفوظًا في ملف العميل.
   return decoded.role === "admin" || decoded.email_verified === true ? decoded : null;
 }
 
+/**
+ * لا تُمنح صلاحية CMC إلا من Custom Claim موقّع في Firebase Authentication.
+ * لا يُستخدم customers/{uid}.role مصدرًا للتفويض، لأنه جزء من ملف قابل للتغيير
+ * عبر عمليات خادمية مستقبلية أو أخطاء عقد البيانات.
+ */
 export async function requireAdmin(request: NextRequest): Promise<DecodedIdToken | null> {
   const decoded = await requireUser(request);
-  if (!decoded) return null;
-  if (decoded.role === "admin") return decoded;
-
-  const db = adminDb();
-  if (!db) return null;
-  try {
-    const customer = await db.collection("customers").doc(decoded.uid).get();
-    return customer.get("role") === "admin" ? decoded : null;
-  } catch {
-    return null;
-  }
+  return decoded?.role === "admin" ? decoded : null;
 }

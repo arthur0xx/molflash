@@ -44,7 +44,7 @@ async function authModules() {
 async function firebaseSession(user: FirebaseUserLike): Promise<AuthSession> {
   const { getIdTokenResult, doc, getDoc, firebaseServices } = await authModules();
   const claims = await getIdTokenResult(user as never, true);
-  let role: Role = claims.claims.role === "admin" ? "admin" : "customer";
+  const role: Role = claims.claims.role === "admin" ? "admin" : "customer";
   let fullName = user.displayName || user.email?.split("@")[0] || "عميل ChriGsm";
   let phone = user.phoneNumber || "";
   try {
@@ -52,7 +52,6 @@ async function firebaseSession(user: FirebaseUserLike): Promise<AuthSession> {
     const customer = services ? await getDoc(doc(services.db, "customers", user.uid)) : null;
     if (customer?.exists()) {
       const profile = customer.data() as Record<string, unknown>;
-      if (profile.role === "admin") role = "admin";
       if (typeof profile.fullName === "string" && profile.fullName.trim()) fullName = profile.fullName;
       if (typeof profile.phone === "string") phone = profile.phone;
     }
