@@ -72,6 +72,7 @@ function emailCopy(kind: AuthEmailKind): EmailCopy {
 function emailContent(kind: AuthEmailKind, actionUrl: string) {
   const copy = emailCopy(kind);
   const safeUrl = escapeHtml(actionUrl);
+  const safeLogoUrl = escapeHtml(new URL("/brand/cg-logo.png", actionUrl).toString());
   const safeButtonLabel = escapeHtml(copy.actionLabel);
 
   return {
@@ -102,10 +103,10 @@ function emailContent(kind: AuthEmailKind, actionUrl: string) {
                     <td style="padding:32px 32px 30px;background:#102a43;background:linear-gradient(135deg,#0f253c 0%,#183f58 100%);color:#ffffff;text-align:right;">
                       <table role="presentation" cellspacing="0" cellpadding="0" border="0">
                         <tr>
-                          <td style="width:42px;height:42px;border-radius:13px;background:#0f766e;color:#ffffff;font-size:17px;font-weight:800;text-align:center;vertical-align:middle;">CG</td>
-                          <td style="padding-right:12px;vertical-align:middle;">
-                            <p style="margin:0 0 3px;font-size:12px;font-weight:700;letter-spacing:.04em;color:#b7d9d7;">${escapeHtml(copy.eyebrow)}</p>
-                            <p style="margin:0;font-size:19px;font-weight:700;line-height:1.35;">ChriGsm</p>
+                          <td style="width:58px;vertical-align:middle;padding-left:13px;"><img src="${safeLogoUrl}" width="54" height="54" alt="شعار ChriGsm" style="display:block;width:54px;height:54px;border:0;border-radius:14px;outline:none;text-decoration:none;" /></td>
+                          <td style="vertical-align:middle;text-align:right;" dir="rtl">
+                            <p style="margin:0 0 4px;font-size:13px;font-weight:700;letter-spacing:0;color:#c0dedc;">${escapeHtml(copy.eyebrow)}</p>
+                            <p style="margin:0;font-size:22px;font-weight:800;line-height:1.2;letter-spacing:.01em;">ChriGsm</p>
                           </td>
                         </tr>
                       </table>
