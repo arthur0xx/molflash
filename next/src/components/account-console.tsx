@@ -9,10 +9,12 @@ import { BellRing, CheckCircle2, ChevronDown, ClipboardList, KeyRound, LogOut, M
 import { formatMAD, statusLabels, type OrderNotification, type OrderStatus, type SupportTicket } from "@/lib/types";
 import { firebaseServices } from "@/lib/firebase/client";
 import { requestPasswordReset, signOut } from "@/lib/auth";
+import { MediaImageControl } from "@/components/media-image-control";
+import { requestSignedMediaUpload, uploadSignedMediaImage } from "@/lib/media-upload";
 
 const orderTone = (status: OrderStatus) => ({ new: "blue", processing: "amber", waiting: "violet", completed: "green", rejected: "red" }[status]);
 const fieldLabels: Record<string, string> = { email: "البريد الإلكتروني", imei: "IMEI", model: "موديل الجهاز", serial: "Serial Number", username: "اسم المستخدم", plan: "الباقة", duration: "مدة الكراء", game: "اللعبة", playerId: "Player ID" };
-type CustomerProfile = { id: string; fullName: string; phone: string; email: string; walletMad: number };
+type CustomerProfile = { id: string; fullName: string; phone: string; email: string; walletMad: number; avatarUrl?: string; avatarPublicId?: string };
 type AccountOrder = { id: string; customerId: string; customerName: string; customerPhone: string; customerEmail: string; serviceId: string; serviceTitle: string; totalMad: number; status: OrderStatus; createdAt: string; updatedAt: string; answers: Record<string, string>; deliveryCode?: string; deliveryNote?: string; statusHistory: Array<{ status: OrderStatus; at: string; note: string }>; notification?: OrderNotification };
 type AccountState = "loading" | "signed-out" | "blocked" | "ready" | "error";
 
@@ -44,6 +46,8 @@ export function AccountConsole() {
   const [profileSaved, setProfileSaved] = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileError, setProfileError] = useState("");
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarError, setAvatarError] = useState("");
   const [ticketSaved, setTicketSaved] = useState(false);
   const [supportError, setSupportError] = useState("");
   const [supportSaving, setSupportSaving] = useState(false);
@@ -65,7 +69,7 @@ export function AccountConsole() {
           await firebase.auth.signOut().catch(() => undefined);
           return;
         }
-        const profile: CustomerProfile = { id: user.uid, fullName: asString(rawCustomer.fullName, user.displayName || "عميل ChriGsm"), phone: asString(rawCustomer.phone, user.phoneNumber || ""), email: asString(rawCustomer.email, user.email || ""), walletMad: asNumber(rawCustomer.walletMad) };
+        const profile: CustomerProfile = { id: user.uid, fullName: asString(rawCustomer.fullName, user.displayName || "عميل ChriGsm"), phone: asString(rawCustomer.phone, user.phoneNumber || ""), email: asString(rawCustomer.email, user.email || ""), walletMad: asNumber(rawCustomer.walletMad), avatarUrl: asString(rawCustomer.avatarUrl) || undefined, avatarPublicId: asString(rawCustomer.avatarPublicId) || undefined };
         const orderSnapshot = await getDocs(query(collection(firebase.db, "orders"), where("customerId", "==", user.uid)));
         const loadedOrders = await Promise.all(orderSnapshot.docs.map(async (orderDoc) => {
           const raw = orderDoc.data() as Record<string, unknown>;
@@ -98,6 +102,44 @@ export function AccountConsole() {
       setProfileSaved(true);
     } catch (reason) { setProfileError(reason instanceof Error ? reason.message : "تعذر حفظ إعدادات الحساب."); }
     finally { setProfileSaving(false); }
+  }
+
+  async function uploadProfileImage(file: File) {
+    const user = firebase?.auth.currentUser;
+    if (!user) { setAvatarError("سجّل الدخول أولًا لتغيير صورة الحساب."); return; }
+    try {
+      setAvatarUploading(true); setAvatarError(""); setProfileSaved(false);
+      const signed = await requestSignedMediaUpload(await user.getIdToken(), "/api/account/media/signature");
+      const asset = await uploadSignedMediaImage(file, signed, "chrigsm/profiles/", "رفع صورة الحساب");
+      const response = await fetch("/api/account/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${await user.getIdToken()}` },
+        body: JSON.stringify({ avatarUrl: asset.imageUrl, avatarPublicId: asset.imagePublicId }),
+      });
+      const result = await response.json().catch(() => ({})) as { profile?: Partial<CustomerProfile>; error?: string };
+      if (!response.ok || !result.profile) throw new Error(result.error || "تعذر حفظ صورة الحساب.");
+      setCustomer((previous) => previous ? { ...previous, ...result.profile } : previous);
+      setProfileSaved(true);
+    } catch (reason) { setAvatarError(reason instanceof Error ? reason.message : "تعذر تغيير صورة الحساب."); }
+    finally { setAvatarUploading(false); }
+  }
+
+  async function removeProfileImage() {
+    const user = firebase?.auth.currentUser;
+    if (!user) { setAvatarError("سجّل الدخول أولًا لتغيير صورة الحساب."); return; }
+    try {
+      setAvatarUploading(true); setAvatarError(""); setProfileSaved(false);
+      const response = await fetch("/api/account/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${await user.getIdToken()}` },
+        body: JSON.stringify({ avatarUrl: null, avatarPublicId: null }),
+      });
+      const result = await response.json().catch(() => ({})) as { profile?: Partial<CustomerProfile>; error?: string };
+      if (!response.ok || !result.profile) throw new Error(result.error || "تعذر إزالة صورة الحساب.");
+      setCustomer((previous) => previous ? { ...previous, ...result.profile } : previous);
+      setProfileSaved(true);
+    } catch (reason) { setAvatarError(reason instanceof Error ? reason.message : "تعذر إزالة صورة الحساب."); }
+    finally { setAvatarUploading(false); }
   }
 
   async function submitSupport(event: FormEvent<HTMLFormElement>) {
@@ -135,7 +177,7 @@ export function AccountConsole() {
     <section className="account-hero"><div><p className="eyebrow">منطقة العميل</p><h1>مرحبًا، {customer.fullName}</h1><p>{customer.email}</p></div><div className="wallet-hero"><WalletCards size={22}/><span>رصيد المحفظة</span><strong>{formatMAD(customer.walletMad)}</strong></div></section>
     {unreadNotifications.length > 0 && <section className="order-notification"><BellRing size={21}/><div><p>إشعار الطلب</p><b>{unreadNotifications[0].notification?.title}</b><span>{unreadNotifications[0].notification?.body}</span></div><span className="status-pill green">تم التسليم</span></section>}
     <section className="account-actions" aria-label="إجراءات الحساب"><button type="button" className={showSettings ? "active" : ""} onClick={() => { setShowSettings(!showSettings); setShowSupport(false); }}><Settings2 size={18}/><span>إعدادات الحساب</span><ChevronDown size={15}/></button><button type="button" className={showSupport ? "active" : ""} onClick={() => { setShowSupport(!showSupport); setShowSettings(false); }}><MessageCircle size={18}/><span>الدعم الفني</span><ChevronDown size={15}/></button><button type="button" className="account-logout" onClick={handleSignOut}><LogOut size={18}/><span>تسجيل الخروج</span></button></section>
-    {showSettings && <section className="account-panel"><div className="panel-heading"><div><p className="eyebrow">بيانات العميل</p><h2>إعدادات الحساب</h2></div><UserRound size={22}/></div><form className="settings-form" onSubmit={submitProfile}><label><span>الاسم الكامل</span><input value={profileDraft.fullName} onChange={(event) => setProfileDraft({ ...profileDraft, fullName: event.target.value })} required disabled={profileSaving}/></label><label><span>رقم الهاتف</span><input type="tel" value={profileDraft.phone} onChange={(event) => setProfileDraft({ ...profileDraft, phone: event.target.value })} required disabled={profileSaving}/></label><label><span>البريد الإلكتروني</span><input type="email" value={profileDraft.email} readOnly disabled aria-describedby="email-managed-note"/></label><p className="muted-text" id="email-managed-note">يُستخدم هذا البريد للدخول واستعادة كلمة المرور.</p><div className="settings-password"><KeyRound size={18}/><div><b>كلمة المرور</b><p>سنرسل رابطًا آمنًا إلى بريدك لتعيين كلمة مرور جديدة.</p>{passwordResetState === "sent" && <p className="password-reset-status success" role="status">إذا كان البريد مرتبطًا بحساب ChriGsm، ستصلك رسالة لإعادة تعيين كلمة المرور.</p>}{passwordResetState === "error" && <p className="password-reset-status error" role="alert">استعادة كلمة المرور غير متاحة حاليًا. تحقق من اتصالك ثم حاول لاحقًا.</p>}</div><button type="button" className="outline-button" onClick={sendAccountPasswordReset} disabled={passwordResetState === "sending"}>{passwordResetState === "sending" ? "جارٍ الإرسال..." : "إرسال رابط التغيير"}</button></div><div className="form-actions"><button className="primary-button" type="submit" disabled={profileSaving}>{profileSaving ? "جارٍ الحفظ..." : "حفظ التغييرات"}</button>{profileSaved && <span className="saved-inline"><CheckCircle2 size={16}/> حُفظت إعدادات الحساب</span>}{profileError && <span className="form-error" role="alert">{profileError}</span>}</div></form></section>}
+    {showSettings && <section className="account-panel"><div className="panel-heading"><div><p className="eyebrow">بيانات العميل</p><h2>إعدادات الحساب</h2></div><UserRound size={22}/></div><MediaImageControl imageUrl={customer.avatarUrl} alt={`صورة ${customer.fullName}`} fallbackLabel={customer.fullName} kind="profile" onSelect={uploadProfileImage} onRemove={removeProfileImage} disabled={profileSaving} uploading={avatarUploading}/>{avatarError && <p className="form-error" role="alert">{avatarError}</p>}<form className="settings-form" onSubmit={submitProfile}><label><span>الاسم الكامل</span><input value={profileDraft.fullName} onChange={(event) => setProfileDraft({ ...profileDraft, fullName: event.target.value })} required disabled={profileSaving}/></label><label><span>رقم الهاتف</span><input type="tel" value={profileDraft.phone} onChange={(event) => setProfileDraft({ ...profileDraft, phone: event.target.value })} required disabled={profileSaving}/></label><label><span>البريد الإلكتروني</span><input type="email" value={profileDraft.email} readOnly disabled aria-describedby="email-managed-note"/></label><p className="muted-text" id="email-managed-note">يُستخدم هذا البريد للدخول واستعادة كلمة المرور.</p><div className="settings-password"><KeyRound size={18}/><div><b>كلمة المرور</b><p>سنرسل رابطًا آمنًا إلى بريدك لتعيين كلمة مرور جديدة.</p>{passwordResetState === "sent" && <p className="password-reset-status success" role="status">إذا كان البريد مرتبطًا بحساب ChriGsm، ستصلك رسالة لإعادة تعيين كلمة المرور.</p>}{passwordResetState === "error" && <p className="password-reset-status error" role="alert">استعادة كلمة المرور غير متاحة حاليًا. تحقق من اتصالك ثم حاول لاحقًا.</p>}</div><button type="button" className="outline-button" onClick={sendAccountPasswordReset} disabled={passwordResetState === "sending"}>{passwordResetState === "sending" ? "جارٍ الإرسال..." : "إرسال رابط التغيير"}</button></div><div className="form-actions"><button className="primary-button" type="submit" disabled={profileSaving}>{profileSaving ? "جارٍ الحفظ..." : "حفظ التغييرات"}</button>{profileSaved && <span className="saved-inline"><CheckCircle2 size={16}/> حُفظت إعدادات الحساب</span>}{profileError && <span className="form-error" role="alert">{profileError}</span>}</div></form></section>}
     {showSupport && <section className="account-panel"><div className="panel-heading"><div><p className="eyebrow">مساعدة الطلبات والحساب</p><h2>الدعم الفني</h2></div><MessageCircle size={22}/></div><p className="panel-intro">أرسل رسالتك وسيتابعها فريق الدعم من داخل المتجر.</p><form className="support-form" onSubmit={submitSupport}><label><span>موضوع الرسالة</span><input name="subject" placeholder="مثال: أحتاج مساعدة في طلبي" minLength={4} required disabled={supportSaving}/></label><label><span>تفاصيل المشكلة</span><textarea name="message" placeholder="اكتب رقم الطلب أو اشرح ما تحتاجه..." minLength={10} required disabled={supportSaving}/></label><button className="primary-button" type="submit" disabled={supportSaving}>{supportSaving ? "جارٍ الإرسال..." : "إرسال طلب الدعم"}</button>{ticketSaved && <span className="saved-inline"><CheckCircle2 size={16}/> تم إرسال طلب الدعم</span>}{supportError && <span className="form-error">{supportError}</span>}</form>{tickets.length > 0 && <div className="ticket-list"><h3>رسائلي للدعم</h3>{tickets.map((ticket) => <article key={ticket.id}><div><b>{ticket.subject}</b><p>{ticket.message}</p>{ticket.reply && <div className="ticket-reply"><b>رد CMC</b><p>{ticket.reply.message}</p></div>}</div><span>{ticket.status === "open" ? "مفتوح" : "تم الرد"}</span></article>)}</div>}</section>}
     <section className="section-block"><div className="section-title"><div><p className="eyebrow">متابعة مباشرة</p><h2>طلباتي</h2></div><span className="muted-text">{orders.length} طلبات</span></div><div className="order-list">{orders.map((order) => <OrderRow key={order.id} order={order} />)}</div></section>
     <section className="security-note"><ShieldCheck size={21}/><div><h3>خصوصية حسابك مهمة</h3><p>لا يطّلع على طلباتك وبياناتك إلا أنت وفريق المتجر عند الحاجة إلى المتابعة.</p></div></section>

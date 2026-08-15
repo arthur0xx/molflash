@@ -19,7 +19,7 @@ const dynamicFieldSchema = z.object({
 const managedImageUrl = z.string().trim().url("رابط الصورة غير صحيح").refine((value) => {
   try { return new URL(value).protocol === "https:" && new URL(value).hostname === "res.cloudinary.com"; } catch { return false; }
 }, "الصورة يجب أن تأتي من Cloudinary المهيأ").max(2000, "رابط الصورة طويل جدًا");
-const managedImagePublicId = z.string().trim().regex(/^chrigsm\/services\/[a-z0-9_-]{3,180}$/i, "معرف صورة الخدمة غير صحيح").max(220);
+const managedImagePublicId = z.string().trim().regex(/^chrigsm\/(?:catalog\/[a-z0-9_-]+\/[a-z0-9_-]+|services\/[a-z0-9_-]+)$/i, "معرف صورة الخدمة غير صحيح").max(220);
 
 const updateServiceSchema = z.object({
   slug: z.string().trim().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/i, "رابط الخدمة غير صحيح").min(2).max(100).optional(),

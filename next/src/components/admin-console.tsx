@@ -8,6 +8,7 @@ import { formatMAD, statusLabels } from "@/lib/types";
 import { firebaseServices } from "@/lib/firebase/client";
 import { AdminSessionControls } from "@/components/admin-session-controls";
 import { MediaImageControl } from "@/components/media-image-control";
+import { requestSignedMediaUpload, uploadSignedMediaImage } from "@/lib/media-upload";
 
 const statusOptions: OrderStatus[] = ["new", "processing", "waiting", "completed", "rejected"];
 const orderTone = (status: OrderStatus) => ({ new: "blue", processing: "amber", waiting: "violet", completed: "green", rejected: "red" }[status]);
@@ -96,38 +97,17 @@ export function AdminConsole({ initial }: { initial: StoreSnapshot }) {
     return result;
   }
 
-  async function uploadFileWithTimeout(input: RequestInfo | URL, init: RequestInit, label: string) {
-    const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), 20_000);
-    try { return await fetch(input, { ...init, signal: controller.signal }); }
-    catch (error) {
-      if (controller.signal.aborted) throw new Error(`انتهت مهلة ${label}. تحقق من الاتصال ثم أعد المحاولة.`);
-      throw error;
-    } finally { window.clearTimeout(timeout); }
-  }
-
   async function uploadServiceImage(file: File) {
     if (!mediaStatus?.configured) throw new Error("خدمة رفع الصور غير متاحة حاليًا.");
     if (serviceForm.title.trim().length < 2) throw new Error("اكتب اسم الخدمة أولًا قبل رفع الصورة.");
-    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) throw new Error("اختر صورة PNG أو JPEG أو WebP.");
-    if (file.size > 10 * 1024 * 1024) throw new Error("حجم الصورة يتجاوز الحد المسموح 10 ميغابايت.");
+    const user = firebase?.auth.currentUser;
+    if (!user) throw new Error("سجّل الدخول بحساب مدير لرفع صورة الخدمة.");
 
     setImageUploading(true);
     try {
-      const signed = await adminRequest<{ cloudName: string; apiKey: string; folder: string; publicId: string; timestamp: number; signature: string; overwrite: boolean; invalidate: boolean }>("/api/admin/media/signature", "POST", { serviceId: editor?.id, title: serviceForm.title.trim() });
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("api_key", signed.apiKey);
-      formData.append("timestamp", String(signed.timestamp));
-      formData.append("signature", signed.signature);
-      formData.append("folder", signed.folder);
-      formData.append("public_id", signed.publicId);
-      formData.append("overwrite", String(signed.overwrite));
-      formData.append("invalidate", String(signed.invalidate));
-      const response = await uploadFileWithTimeout(`https://api.cloudinary.com/v1_1/${signed.cloudName}/image/upload`, { method: "POST", body: formData }, "رفع صورة الخدمة");
-      const result = await response.json().catch(() => ({})) as { secure_url?: string; public_id?: string; error?: { message?: string } };
-      if (!response.ok || !result.secure_url?.startsWith("https://") || !result.public_id?.startsWith("chrigsm/services/")) throw new Error(result.error?.message || "تعذر رفع الصورة إلى Cloudinary.");
-      setServiceForm((previous) => ({ ...previous, imageUrl: result.secure_url || "", imagePublicId: result.public_id || "" }));
+      const signed = await requestSignedMediaUpload(await user.getIdToken(), "/api/admin/media/signature", { serviceId: editor?.id, title: serviceForm.title.trim() });
+      const asset = await uploadSignedMediaImage(file, signed, "chrigsm/catalog/", "رفع صورة الخدمة");
+      setServiceForm((previous) => ({ ...previous, imageUrl: asset.imageUrl, imagePublicId: asset.imagePublicId }));
       setNotice("رُفعت صورة الخدمة. اضغط حفظ لتثبيت التغيير.");
     } finally { setImageUploading(false); }
   }
