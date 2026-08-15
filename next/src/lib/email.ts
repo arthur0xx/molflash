@@ -22,11 +22,22 @@ type EmailCopy = {
 };
 
 function smtpConfiguration() {
-  const user = process.env.GMAIL_SMTP_USER?.trim();
-  const password = process.env.GMAIL_SMTP_APP_PASSWORD?.replace(/\s/g, "");
-  const senderName = process.env.GMAIL_SMTP_SENDER_NAME?.trim() || "ChriGsm";
+  const genericHost = process.env.EMAIL_SMTP_HOST?.trim();
+  const genericUser = process.env.EMAIL_SMTP_USER?.trim();
+  const genericPassword = process.env.EMAIL_SMTP_PASSWORD?.replace(/\s/g, "");
+  const legacyUser = process.env.GMAIL_SMTP_USER?.trim();
+  const legacyPassword = process.env.GMAIL_SMTP_APP_PASSWORD?.replace(/\s/g, "");
+  const user = genericUser || legacyUser;
+  const password = genericPassword || legacyPassword;
   if (!user || !password) return null;
-  return { user, password, senderName };
+  const portValue = Number(process.env.EMAIL_SMTP_PORT || (genericHost ? 587 : 465));
+  const port = Number.isInteger(portValue) && portValue > 0 && portValue < 65536 ? portValue : 587;
+  const host = genericHost || "smtp.gmail.com";
+  const senderName = process.env.EMAIL_FROM_NAME?.trim() || process.env.GMAIL_SMTP_SENDER_NAME?.trim() || "ChriGsm";
+  const senderEmail = process.env.EMAIL_FROM_EMAIL?.trim() || user;
+  const replyTo = process.env.EMAIL_REPLY_TO?.trim() || senderEmail;
+  const secure = process.env.EMAIL_SMTP_SECURE === "true" || (!genericHost && port === 465);
+  return { host, port, secure, user, password, senderName, senderEmail, replyTo };
 }
 
 export function gmailSmtpConfigured() {
@@ -158,16 +169,17 @@ export async function sendAuthEmail({ to, actionUrl, kind }: AuthEmailInput) {
   if (parsedUrl.protocol !== "https:") throw new Error("INVALID_ACTION_URL");
 
   const transporter = nodemailer.createTransport({
-    host: "smtp.gmail.com",
-    port: 465,
-    secure: true,
+    host: config.host,
+    port: config.port,
+    secure: config.secure,
     auth: { user: config.user, pass: config.password },
     tls: { minVersion: "TLSv1.2" },
   });
   const content = emailContent(kind, parsedUrl.toString());
   const result = await transporter.sendMail({
-    from: { name: config.senderName.replace(/[\r\n]/g, " "), address: config.user },
-    replyTo: config.user,
+    from: { name: config.senderName.replace(/[\r\n]/g, " "), address: config.senderEmail },
+    replyTo: config.replyTo,
+    headers: { "X-Entity-Ref-ID": `chrigsm-auth-${kind}`, "Auto-Submitted": "auto-generated" },
     to,
     subject: content.subject,
     text: content.text,

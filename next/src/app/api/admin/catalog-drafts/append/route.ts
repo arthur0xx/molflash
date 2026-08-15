@@ -27,11 +27,11 @@ export async function POST(request: NextRequest) {
     const now = new Date().toISOString();
     const batch = db.batch();
     for (const draft of drafts) {
-      const serviceRef = db.collection("services").doc(draft.id);
-      const privateRef = db.collection("servicePrivate").doc(draft.id);
-      const { supplier, id: _draftId, ...publicDraft } = draft;
-      batch.create(serviceRef, { id: draft.id, ...publicDraft, categoryId, imageUrl: "", imagePublicId: "", isActive: false, publicationStatus: "draft", createdAt: now, updatedAt: now, createdBy: admin.uid });
-      batch.create(privateRef, { serviceId: draft.id, ...supplier, salePriceSnapshot: draft.priceMad, grossProfitSnapshot: Number((draft.priceMad - supplier.supplierCostSnapshot * supplier.fxRateSnapshot).toFixed(2)), createdAt: now, updatedAt: now, createdBy: admin.uid });
+      const { supplier, id, ...publicDraft } = draft;
+      const serviceRef = db.collection("services").doc(id);
+      const privateRef = db.collection("servicePrivate").doc(id);
+      batch.create(serviceRef, { id, ...publicDraft, categoryId, imageUrl: "", imagePublicId: "", isActive: false, publicationStatus: "draft", createdAt: now, updatedAt: now, createdBy: admin.uid });
+      batch.create(privateRef, { serviceId: id, ...supplier, salePriceSnapshot: draft.priceMad, grossProfitSnapshot: Number((draft.priceMad - supplier.supplierCostSnapshot * supplier.fxRateSnapshot).toFixed(2)), createdAt: now, updatedAt: now, createdBy: admin.uid });
     }
     const auditRef = db.collection("auditLogs").doc();
     batch.create(auditRef, { action: "catalog_drafts_appended", categoryId, serviceIds: drafts.map((draft) => draft.id), serviceCount: drafts.length, actorUid: admin.uid, at: now });

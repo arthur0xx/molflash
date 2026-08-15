@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useId } from "react";
 import { Pencil, Trash2, UserRound } from "lucide-react";
 
@@ -21,7 +22,7 @@ export function MediaImageControl({ imageUrl, alt, fallbackLabel, kind, onSelect
 
   return <section className={`media-image-control ${kind}`} aria-label={label}>
     <div className="media-image-preview">
-      {hasImage ? <img src={imageUrl} alt={alt}/> : kind === "profile" ? <UserRound aria-label="الصورة الافتراضية"/> : <span aria-label="صورة خدمة افتراضية">{fallbackLabel.slice(0, 2)}</span>}
+      {hasImage ? <Image src={imageUrl!} alt={alt} width={128} height={128} sizes="128px"/> : kind === "profile" ? <UserRound aria-label="الصورة الافتراضية"/> : <span aria-label="صورة خدمة افتراضية">{fallbackLabel.slice(0, 2)}</span>}
     </div>
     <div className="media-image-actions">
       <div><b>{hasImage ? label : `${label} افتراضية`}</b><small>{hasImage ? "استخدم القلم للاستبدال أو أزل الصورة للعودة إلى الافتراضية." : "ارفع صورة عند الحاجة؛ لن يظهر الرابط لأي مستخدم."}</small></div>

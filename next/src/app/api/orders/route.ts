@@ -3,6 +3,7 @@ import { z } from "zod";
 import { adminDb } from "@/lib/firebase/admin";
 import { requireVerifiedUser } from "@/lib/api/admin-auth";
 import type { DynamicField } from "@/lib/types";
+import { notifyOrderEvent } from "@/lib/order-notifications";
 
 const createOrderSchema = z.object({
   serviceId: z.string().trim().min(1, "الخدمة غير محددة"),
@@ -48,7 +49,7 @@ export async function POST(request: NextRequest) {
     if (!customerSnapshot.exists) return NextResponse.json({ error: "ملف العميل غير موجود" }, { status: 404 });
     if (!serviceSnapshot.exists || serviceSnapshot.data()?.isActive !== true) return NextResponse.json({ error: "الخدمة غير متاحة" }, { status: 404 });
 
-    const service = serviceSnapshot.data() as { priceMad?: unknown; fields?: unknown };
+    const service = serviceSnapshot.data() as { priceMad?: unknown; fields?: unknown; title?: unknown };
     if (typeof service.priceMad !== "number" || service.priceMad < 0 || !Array.isArray(service.fields)) return NextResponse.json({ error: "بيانات الخدمة غير صحيحة" }, { status: 409 });
     const formData = validateFormData(parsed.data.formData, service.fields as DynamicField[]);
 
@@ -68,6 +69,7 @@ export async function POST(request: NextRequest) {
     });
     batch.create(auditReference, { action: "order_created", orderId: orderReference.id, customerId: user.uid, actorUid: user.uid, at: now });
     await batch.commit();
+    await notifyOrderEvent({ orderId: orderReference.id, customerId: user.uid, serviceTitle: typeof service.title === "string" ? service.title : "خدمة رقمية", event: "received" });
 
     return NextResponse.json({ ok: true, id: orderReference.id }, { status: 201 });
   } catch (error) {

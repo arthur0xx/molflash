@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { adminDb } from "@/lib/firebase/admin";
-import { requireAdmin } from "@/lib/api/admin-auth";
+import { requireStaff } from "@/lib/api/admin-auth";
 import type { SupportTicket } from "@/lib/types";
 
 const replyTicketSchema = z.object({
@@ -9,7 +9,7 @@ const replyTicketSchema = z.object({
 });
 
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  const admin = await requireAdmin(request);
+  const admin = await requireStaff(request, "support");
   if (!admin) return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
 
   const db = adminDb();

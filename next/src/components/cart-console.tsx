@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, LockKeyhole, Plus, ShoppingBag, Trash2 } from "lucide-react";
+import { ArrowLeft, CheckCircle2, LockKeyhole, Plus, ShoppingBag, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { Service } from "@/lib/types";
 import { formatMAD } from "@/lib/types";
@@ -27,7 +27,7 @@ export function CartConsole({ services }: { services: Service[] }) {
   const suggestions = services.filter((service) => !selectedServices.some((item) => item.id === service.id)).slice(0, 4);
 
   if (session === undefined) return <main className="cart-page"><p className="muted-text">جارٍ فتح قائمتك...</p></main>;
-  if (!session) return <main className="cart-page"><section className="cart-access"><span className="access-icon"><LockKeyhole size={28}/></span><p className="eyebrow">الخدمات المختارة</p><h1>سجّل الدخول أولًا</h1><p>بعد الدخول يمكنك حفظ الخدمات التي تهمك ومتابعة طلباتك من حسابك.</p><Link className="primary-button" href="/login?next=/cart">تسجيل الدخول <ArrowLeft size={16}/></Link></section></main>;
+  if (!session) return <main className="cart-page"><section className="cart-access"><span className="access-icon"><LockKeyhole size={28}/></span><p className="eyebrow">الخدمات المختارة</p><h1>سجّل الدخول للمتابعة</h1><p>يحفظ الحساب خدماتك المختارة ويجعل كل طلب وتحديثه ظاهرًا لك في مكان واحد.</p><ul className="cart-access-steps"><li><CheckCircle2 size={16}/> افتح حسابًا أو ادخل ببريدك أو Google.</li><li><CheckCircle2 size={16}/> أرسل بيانات كل خدمة من نموذجها الآمن.</li><li><CheckCircle2 size={16}/> تابع المعالجة والتسليم من منطقة العميل.</li></ul><Link className="primary-button" href="/login?next=/cart">تسجيل الدخول <ArrowLeft size={16}/></Link><Link className="filter-button" href="/catalog">العودة إلى الخدمات</Link></section></main>;
 
   function add(service: Service) { addCartItem(service); setNotice(`أضيفت «${service.title}» إلى خدماتك المختارة.`); }
   function remove(id: string) { removeCartItem(id); setNotice("أُزيلت الخدمة من خدماتك المختارة."); }

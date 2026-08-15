@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 import { z } from "zod";
 import { adminDb } from "@/lib/firebase/admin";
-import { requireAdmin } from "@/lib/api/admin-auth";
+import { requireStaff } from "@/lib/api/admin-auth";
 import { statusLabels, type OrderStatus } from "@/lib/types";
+import { notifyOrderEvent } from "@/lib/order-notifications";
 
 const orderStatuses = ["new", "processing", "waiting", "completed", "rejected"] as const;
 const updateOrderSchema = z.object({
@@ -24,7 +25,7 @@ class OrderStatusError extends Error {
 }
 
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  const admin = await requireAdmin(request);
+  const admin = await requireStaff(request, "orders");
   if (!admin) return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
 
   const db = adminDb();
@@ -38,6 +39,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     const deliveryNote = parsed.data.deliveryNote || "";
     const now = new Date().toISOString();
     let nextStatus: OrderStatus | null = null;
+    let notificationInput: { orderId: string; customerId: string; serviceTitle: string; event: "processing" | "completed" | "delivery_added" } | null = null;
 
     await db.runTransaction(async (transaction) => {
       const orderReference = db.collection("orders").doc(id);
@@ -45,13 +47,15 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       const orderSnapshot = await transaction.get(orderReference);
       if (!orderSnapshot.exists) throw new OrderStatusError(404, "الطلب غير موجود");
 
-      const current = orderSnapshot.data() as { status?: OrderStatus; serviceId?: string };
+      const current = orderSnapshot.data() as { status?: OrderStatus; serviceId?: string; customerId?: string };
       if (!current.status || !orderStatuses.includes(current.status)) throw new OrderStatusError(409, "حالة الطلب الحالية غير صحيحة");
       const requestedStatus = deliveryCode ? "completed" : parsed.data.status;
       if (!requestedStatus) throw new OrderStatusError(400, "اختر حالة جديدة أو أرسل تفاصيل التسليم");
       if (deliveryCode && parsed.data.status && parsed.data.status !== "completed") throw new OrderStatusError(400, "لا يمكن إرسال تفاصيل التسليم مع حالة مختلفة عن مكتمل");
       if (!allowedTransitions[current.status].includes(requestedStatus)) throw new OrderStatusError(409, "انتقال حالة الطلب غير مسموح");
 
+      const serviceSnapshot = current.serviceId ? await transaction.get(db.collection("services").doc(current.serviceId)) : null;
+      const title = typeof serviceSnapshot?.data()?.title === "string" ? serviceSnapshot.data()!.title : "خدمة رقمية";
       const history = {
         status: requestedStatus,
         at: now,
@@ -68,8 +72,6 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       };
 
       if (deliveryCode) {
-        const serviceSnapshot = current.serviceId ? await transaction.get(db.collection("services").doc(current.serviceId)) : null;
-        const title = serviceSnapshot?.data()?.title || "الخدمة";
         update.deliveryCode = deliveryCode;
         update.deliveryNote = deliveryNote;
         update.notification = { title: "تم إنجاز طلبك بنجاح", body: `تم تسليم ${title}. راجع كود التسليم في تفاصيل الطلب.`, createdAt: now, read: false };
@@ -78,7 +80,10 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       transaction.update(orderReference, update);
       transaction.create(auditReference, { action: deliveryCode ? "order_delivered" : "order_status_updated", orderId: id, customerId: orderSnapshot.data()?.customerId || null, actorUid: admin.uid, at: now });
       nextStatus = requestedStatus;
+      const event = deliveryCode ? "delivery_added" : requestedStatus === "processing" ? "processing" : requestedStatus === "completed" ? "completed" : null;
+      if (event && typeof current.customerId === "string" && current.customerId) notificationInput = { orderId: id, customerId: current.customerId, serviceTitle: title, event };
     });
+    if (notificationInput) await notifyOrderEvent(notificationInput);
 
     return NextResponse.json({ ok: true, status: nextStatus, updatedAt: now });
   } catch (error) {

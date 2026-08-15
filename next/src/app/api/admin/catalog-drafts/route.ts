@@ -91,11 +91,11 @@ export async function POST(request: NextRequest) {
     batch.create(categoryRef, { ...category, isActive: false, createdAt: now, updatedAt: now, createdBy: admin.uid });
 
     for (const draft of drafts) {
-      const serviceRef = db.collection("services").doc(draft.id);
-      const privateRef = db.collection("servicePrivate").doc(draft.id);
-      const { supplier, id: _draftId, ...publicDraft } = draft;
+      const { supplier, id, ...publicDraft } = draft;
+      const serviceRef = db.collection("services").doc(id);
+      const privateRef = db.collection("servicePrivate").doc(id);
       batch.create(serviceRef, {
-        id: draft.id,
+        id,
         ...publicDraft,
         categoryId: category.id,
         imageUrl: "",
@@ -107,7 +107,7 @@ export async function POST(request: NextRequest) {
         createdBy: admin.uid,
       });
       batch.create(privateRef, {
-        serviceId: draft.id,
+        serviceId: id,
         ...supplier,
         salePriceSnapshot: draft.priceMad,
         grossProfitSnapshot: Number((draft.priceMad - supplier.supplierCostSnapshot * supplier.fxRateSnapshot).toFixed(2)),

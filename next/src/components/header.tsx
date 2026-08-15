@@ -39,7 +39,7 @@ function useSession() {
 export function Header() {
   const pathname = usePathname();
   const session = useSession();
-  const accountHref = session?.role === "admin" ? "/admin" : session ? "/account" : "/login";
+  const accountHref = session?.role === "admin" || session?.role === "manager" ? "/admin" : session ? "/account" : "/login";
   const cartHref = session ? "/cart" : "/login?next=/cart";
   const cartCount = useCartCount();
   return <header className="site-header">
@@ -52,7 +52,7 @@ export function Header() {
 export function BottomNav() {
   const pathname = usePathname();
   const session = useSession();
-  const accountHref = session?.role === "admin" ? "/admin" : session ? "/account" : "/login";
-  const items = [{ href: "/", label: "الرئيسية", icon: <Home size={18} /> }, { href: "/catalog", label: "الخدمات", icon: <Grid2X2 size={18} /> }, { href: accountHref, label: session?.role === "admin" ? "الإدارة" : session ? "حسابي" : "دخول", icon: <UserRound size={18} /> }];
+  const accountHref = session?.role === "admin" || session?.role === "manager" ? "/admin" : session ? "/account" : "/login";
+  const items = [{ href: "/", label: "الرئيسية", icon: <Home size={18} /> }, { href: "/catalog", label: "الخدمات", icon: <Grid2X2 size={18} /> }, { href: accountHref, label: session?.role === "admin" || session?.role === "manager" ? "الإدارة" : session ? "حسابي" : "دخول", icon: <UserRound size={18} /> }];
   return <nav className="bottom-nav" aria-label="تنقل الهاتف">{items.map((item) => <Link key={item.href} href={item.href} className={isCurrent(pathname, item.href) ? "nav-current" : ""} aria-current={isCurrent(pathname, item.href) ? "page" : undefined}>{item.icon}<span>{item.label}</span></Link>)}</nav>;
 }

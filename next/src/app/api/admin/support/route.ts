@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
-import { requireAdmin } from "@/lib/api/admin-auth";
+import { requireStaff } from "@/lib/api/admin-auth";
 import type { SupportTicket } from "@/lib/types";
 
 function serializeTicket(id: string, raw: Record<string, unknown>): SupportTicket {
@@ -21,7 +21,7 @@ function serializeTicket(id: string, raw: Record<string, unknown>): SupportTicke
 }
 
 export async function GET(request: NextRequest) {
-  const admin = await requireAdmin(request);
+  const admin = await requireStaff(request, "support");
   if (!admin) return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
 
   const db = adminDb();

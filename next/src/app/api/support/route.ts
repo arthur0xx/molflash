@@ -3,6 +3,7 @@ import { z } from "zod";
 import { adminDb } from "@/lib/firebase/admin";
 import { requireVerifiedUser } from "@/lib/api/admin-auth";
 import type { SupportTicket } from "@/lib/types";
+import { notifyAdminNewSupportTicket } from "@/lib/support-notifications";
 
 const createTicketSchema = z.object({
   subject: z.string().trim().min(4, "موضوع الرسالة قصير جدًا").max(140, "موضوع الرسالة طويل جدًا"),
@@ -76,6 +77,7 @@ export async function POST(request: NextRequest) {
     batch.create(ticketReference, { ...ticket, createdBy: user.uid });
     batch.create(auditReference, { action: "support_ticket_created", ticketId: ticket.id, customerId: user.uid, actorUid: user.uid, at: now });
     await batch.commit();
+    await notifyAdminNewSupportTicket(ticket.id, user.uid);
 
     return NextResponse.json({ ticket }, { status: 201 });
   } catch (error) {

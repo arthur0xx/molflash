@@ -43,5 +43,8 @@ service cloud.firestore {
       allow write: if false;
     }
     match /auditLogs/{logId} { allow read: if admin(); allow write: if false; }
+    // رموز تأكيد الهاتف وسجل قنوات الإشعار يحتويان بيانات تشغيلية حساسة؛ لا يُسمح لهما بأي وصول SDK مباشر.
+    match /phoneVerificationChallenges/{challengeId} { allow read, write: if false; }
+    match /notificationLogs/{notificationId} { allow read, write: if false; }
   }
 }

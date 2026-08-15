@@ -1,4 +1,4 @@
-export type Role = "admin" | "customer";
+export type Role = "admin" | "manager" | "customer";
 export type OrderStatus = "new" | "processing" | "waiting" | "completed" | "rejected";
 
 export interface Category {
@@ -50,17 +50,24 @@ export interface Customer {
   ordersCount: number;
   lastActivity: string;
   whatsappEnabled: boolean;
+  phoneVerifiedAt?: string;
+  notificationPreferences?: { email: boolean; whatsapp: boolean };
   avatarUrl?: string;
   avatarPublicId?: string;
   accountStatus?: "active" | "blocked";
   blockedAt?: string;
   blockedReason?: string;
+  role?: Role;
+  managerPermissions?: { orders: boolean; support: boolean };
+  onboardingCompletedAt?: string;
 }
 
 export interface CustomerProfile {
   fullName: string;
   phone: string;
   email: string;
+  phoneVerifiedAt?: string;
+  notificationPreferences?: { email: boolean; whatsapp: boolean };
   avatarUrl?: string;
   avatarPublicId?: string;
 }

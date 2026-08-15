@@ -4,7 +4,7 @@ const SESSION_KEY = "chrigsm:session";
 const SESSION_EVENT = "chrigsm:auth-session";
 let observerStarted = false;
 
-export type AuthSession = { uid: string; role: Role; fullName: string; phone: string; email: string; emailVerified: boolean; signedInAt: string };
+export type AuthSession = { uid: string; role: Role; fullName: string; phone: string; email: string; emailVerified: boolean; signedInAt: string; managerPermissions?: { orders: boolean; support: boolean } };
 export type PasswordResetResult = "sent" | "invalid-email" | "unavailable";
 export type RegistrationResult = "created" | "email-in-use" | "weak-password" | "invalid-email" | "verification-unavailable" | "unavailable";
 export type VerificationResult = "sent" | "already-verified" | "unavailable";
@@ -44,7 +44,12 @@ async function authModules() {
 async function firebaseSession(user: FirebaseUserLike): Promise<AuthSession> {
   const { getIdTokenResult, doc, getDoc, firebaseServices } = await authModules();
   const claims = await getIdTokenResult(user as never, true);
-  const role: Role = claims.claims.role === "admin" ? "admin" : "customer";
+  const claimRole = claims.claims.role;
+  const role: Role = claimRole === "admin" || claimRole === "manager" ? claimRole : "customer";
+  const claimedPermissions = claims.claims.managerPermissions;
+  const managerPermissions = claimedPermissions && typeof claimedPermissions === "object"
+    ? { orders: (claimedPermissions as Record<string, unknown>).orders === true, support: (claimedPermissions as Record<string, unknown>).support === true }
+    : undefined;
   let fullName = user.displayName || user.email?.split("@")[0] || "عميل ChriGsm";
   let phone = user.phoneNumber || "";
   try {
@@ -58,7 +63,7 @@ async function firebaseSession(user: FirebaseUserLike): Promise<AuthSession> {
   } catch {
     // لا يمنح تعذر قراءة الملف أي صلاحية إدارية.
   }
-  return { uid: user.uid, role, fullName, phone, email: user.email || "", emailVerified: user.emailVerified, signedInAt: new Date().toISOString() };
+  return { uid: user.uid, role, fullName, phone, email: user.email || "", emailVerified: user.emailVerified, signedInAt: new Date().toISOString(), managerPermissions };
 }
 
 async function requestCustomVerificationEmail(user: FirebaseUserLike): Promise<VerificationResult> {
