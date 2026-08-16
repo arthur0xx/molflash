@@ -34,6 +34,23 @@ const dynamicFieldTypes: { value: DynamicField["type"]; label: string }[] = [
   { value: "textarea", label: "ملاحظة طويلة" },
 ];
 
+function toEditorDynamicFields(value: unknown): DynamicField[] {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, 20).map((candidate, index) => {
+    const field = candidate && typeof candidate === "object" ? candidate as Partial<DynamicField> : {};
+    const type: DynamicField["type"] = dynamicFieldTypes.some((item) => item.value === field.type) ? field.type as DynamicField["type"] : "text";
+    const options = Array.isArray(field.options) ? field.options.filter((option): option is string => typeof option === "string") : undefined;
+    return {
+      id: typeof field.id === "string" && field.id.trim() ? field.id : `field-${index + 1}`,
+      label: typeof field.label === "string" ? field.label : "",
+      type,
+      required: field.required !== false,
+      ...(typeof field.placeholder === "string" ? { placeholder: field.placeholder } : {}),
+      ...(type === "select" ? { options: options?.length ? options : [""] } : {}),
+    };
+  });
+}
+
 function normalizeDynamicFields(fields: DynamicField[]): DynamicField[] {
   if (fields.length > 20) throw new Error("الحد الأقصى هو 20 حقلًا لكل خدمة.");
   const seenIds = new Set<string>();
@@ -319,7 +336,7 @@ export function AdminConsole() {
   function openServiceEditor(categoryId?: string, service?: Service) {
     if (!firebase) { setNotice("سجّل الدخول بحساب مدير لتعديل الخدمات."); return; }
     if (service) {
-      setServiceForm({ slug: service.slug, title: service.title, categoryId: service.categoryId, description: service.description, priceMad: String(service.priceMad), delivery: service.delivery, badge: service.badge || "", imageUrl: service.imageUrl || "", imagePublicId: service.imagePublicId || "", isActive: service.isActive, fields: Array.isArray(service.fields) ? service.fields : [] });
+      setServiceForm({ slug: service.slug, title: service.title, categoryId: service.categoryId, description: service.description, priceMad: String(service.priceMad), delivery: service.delivery, badge: service.badge || "", imageUrl: service.imageUrl || "", imagePublicId: service.imagePublicId || "", isActive: service.isActive, fields: toEditorDynamicFields(service.fields) });
       setEditor({ kind: "service", mode: "edit", id: service.id });
     } else {
       setServiceForm(emptyServiceForm(categoryId || activeCategories[0]?.id));
@@ -423,7 +440,7 @@ function EditorDialog({ editor, categoryForm, serviceForm, categories, existingS
 
 function DynamicFieldsEditor({ fields, onChange, disabled }: { fields: DynamicField[]; onChange: (fields: DynamicField[]) => void; disabled: boolean }) {
   function addField() {
-    const existing = new Set(fields.map((field) => field.id.toLowerCase()));
+    const existing = new Set(fields.map((field) => String(field.id || "").toLowerCase()));
     let number = fields.length + 1;
     while (existing.has(`field-${number}`)) number += 1;
     onChange([...fields, { id: `field-${number}`, label: "", type: "text", required: true, placeholder: "" }]);
@@ -433,7 +450,7 @@ function DynamicFieldsEditor({ fields, onChange, disabled }: { fields: DynamicFi
     onChange(fields.map((field, fieldIndex) => fieldIndex === index ? update(field) : field));
   }
 
-  return <section className="dynamic-fields-editor"><div className="dynamic-fields-header"><div><span className="eyebrow">نموذج الطلب</span><h3>الحقول المطلوبة من العميل</h3><p>أضف فقط البيانات اللازمة لتنفيذ هذه الخدمة. يراجع الخادم كل حقل قبل الحفظ والطلب.</p></div><button className="filter-button" type="button" onClick={addField} disabled={disabled || fields.length >= 20}><Plus size={14}/> إضافة حقل</button></div>{fields.length === 0 ? <div className="dynamic-fields-empty"><b>لا توجد حقول مخصصة بعد.</b><span>سيطلب المتجر البريد الإلكتروني افتراضيًا إلى أن تضيف حقولًا خاصة بهذه الخدمة.</span></div> : <div className="dynamic-fields-list">{fields.map((field, index) => <article className="dynamic-field-card" key={`${field.id}-${index}`}><div className="dynamic-field-title"><b>حقل {index + 1}</b><button className="danger-button" type="button" onClick={() => onChange(fields.filter((_, fieldIndex) => fieldIndex !== index))} disabled={disabled}><Trash2 size={14}/> إزالة</button></div><div className="dynamic-field-grid"><label><span>المعرف الداخلي</span><input dir="ltr" value={field.id} onChange={(event) => updateField(index, (current) => ({ ...current, id: event.target.value }))} placeholder="username" disabled={disabled}/></label><label><span>اسم الحقل للعميل</span><input value={field.label} onChange={(event) => updateField(index, (current) => ({ ...current, label: event.target.value }))} placeholder="مثل اسم مستخدم UnlockTool.net" disabled={disabled}/></label><label><span>نوع الإدخال</span><select value={field.type} onChange={(event) => { const type = event.target.value as DynamicField["type"]; updateField(index, (current) => ({ ...current, type, ...(type === "select" ? { options: current.options?.length ? current.options : [""] } : { options: undefined }) })); }} disabled={disabled}>{dynamicFieldTypes.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}</select></label><label><span>نص مساعد</span><input value={field.placeholder || ""} onChange={(event) => updateField(index, (current) => ({ ...current, placeholder: event.target.value }))} placeholder="مثال أو توضيح قصير" disabled={disabled}/></label><Toggle checked={field.required} onChange={(required) => updateField(index, (current) => ({ ...current, required }))} label="حقل مطلوب"/>{field.type === "select" && <label className="dynamic-options"><span>خيارات القائمة</span><textarea value={(field.options || []).join("\n")} onChange={(event) => updateField(index, (current) => ({ ...current, options: event.target.value.split("\n") }))} placeholder={"تفعيل جديد\nتجديد"} disabled={disabled}/><small>اكتب كل خيار في سطر مستقل.</small></label>}</div></article>)}</div>}</section>;
+  return <section className="dynamic-fields-editor"><div className="dynamic-fields-header"><div><span className="eyebrow">نموذج الطلب</span><h3>الحقول المطلوبة من العميل</h3><p>أضف فقط البيانات اللازمة لتنفيذ هذه الخدمة. يراجع الخادم كل حقل قبل الحفظ والطلب.</p></div><button className="filter-button" type="button" onClick={addField} disabled={disabled || fields.length >= 20}><Plus size={14}/> إضافة حقل</button></div>{fields.length === 0 ? <div className="dynamic-fields-empty"><b>لا توجد حقول مخصصة بعد.</b><span>سيطلب المتجر البريد الإلكتروني افتراضيًا إلى أن تضيف حقولًا خاصة بهذه الخدمة.</span></div> : <div className="dynamic-fields-list">{fields.map((field, index) => <article className="dynamic-field-card" key={`${field.id || "field"}-${index}`}><div className="dynamic-field-title"><b>حقل {index + 1}</b><button className="danger-button" type="button" onClick={() => onChange(fields.filter((_, fieldIndex) => fieldIndex !== index))} disabled={disabled}><Trash2 size={14}/> إزالة</button></div><div className="dynamic-field-grid"><label><span>المعرف الداخلي</span><input dir="ltr" value={field.id} onChange={(event) => updateField(index, (current) => ({ ...current, id: event.target.value }))} placeholder="username" disabled={disabled}/></label><label><span>اسم الحقل للعميل</span><input value={field.label} onChange={(event) => updateField(index, (current) => ({ ...current, label: event.target.value }))} placeholder="مثل اسم مستخدم UnlockTool.net" disabled={disabled}/></label><label><span>نوع الإدخال</span><select value={field.type} onChange={(event) => { const type = event.target.value as DynamicField["type"]; updateField(index, (current) => ({ ...current, type, ...(type === "select" ? { options: current.options?.length ? current.options : [""] } : { options: undefined }) })); }} disabled={disabled}>{dynamicFieldTypes.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}</select></label><label><span>نص مساعد</span><input value={field.placeholder || ""} onChange={(event) => updateField(index, (current) => ({ ...current, placeholder: event.target.value }))} placeholder="مثال أو توضيح قصير" disabled={disabled}/></label><Toggle checked={field.required} onChange={(required) => updateField(index, (current) => ({ ...current, required }))} label="حقل مطلوب"/>{field.type === "select" && <label className="dynamic-options"><span>خيارات القائمة</span><textarea value={(field.options || []).join("\n")} onChange={(event) => updateField(index, (current) => ({ ...current, options: event.target.value.split("\n") }))} placeholder={"تفعيل جديد\nتجديد"} disabled={disabled}/><small>اكتب كل خيار في سطر مستقل.</small></label>}</div></article>)}</div>}</section>;
 }
 
 function FormField({ label, wide, children }: { label: string; wide?: boolean; children: ReactNode }) { return <label className={`editor-field${wide ? " wide" : ""}`}><span>{label}</span>{children}</label>; }
