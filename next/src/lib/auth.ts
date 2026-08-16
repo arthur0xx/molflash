@@ -45,7 +45,7 @@ async function firebaseSession(user: FirebaseUserLike): Promise<AuthSession> {
   const { getIdTokenResult, doc, getDoc, firebaseServices } = await authModules();
   const claims = await getIdTokenResult(user as never, true);
   const claimRole = claims.claims.role;
-  const role: Role = claimRole === "admin" || claimRole === "manager" ? claimRole : "customer";
+  const role: Role = claimRole === "admin" || claimRole === "owner" ? "admin" : claimRole === "manager" ? "manager" : "customer";
   const claimedPermissions = claims.claims.managerPermissions;
   const managerPermissions = claimedPermissions && typeof claimedPermissions === "object"
     ? { orders: (claimedPermissions as Record<string, unknown>).orders === true, support: (claimedPermissions as Record<string, unknown>).support === true }

@@ -29,12 +29,12 @@ export async function requireVerifiedUser(request: NextRequest): Promise<Decoded
  */
 export async function requireOwner(request: NextRequest): Promise<DecodedIdToken | null> {
   const decoded = await requireUser(request);
-  return decoded?.role === "admin" ? decoded : null;
+  return decoded?.role === "admin" || decoded?.role === "owner" ? decoded : null;
 }
 
 export async function requireStaff(request: NextRequest, permission?: "orders" | "support"): Promise<DecodedIdToken | null> {
   const decoded = await requireUser(request);
-  if (decoded?.role === "admin") return decoded;
+  if (decoded?.role === "admin" || decoded?.role === "owner") return decoded;
   if (decoded?.role !== "manager") return null;
   if (!permission) return decoded;
   const permissions = decoded.managerPermissions;

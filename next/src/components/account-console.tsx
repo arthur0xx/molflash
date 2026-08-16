@@ -63,6 +63,13 @@ export function AccountConsole() {
     if (!firebase) return;
     return onAuthStateChanged(firebase.auth, async (user) => {
       if (!user) { setAccountState((current) => current === "blocked" ? "blocked" : "signed-out"); setCustomer(null); setOrders([]); return; }
+      try {
+        const tokenResult = await user.getIdTokenResult(true);
+        const claimRole = tokenResult.claims.role;
+        if (claimRole === "admin" || claimRole === "owner" || claimRole === "manager") { router.replace("/admin"); return; }
+      } catch {
+        // نتابع كعميل فقط عند تعذر قراءة المطالبات؛ لا يمنح هذا أي صلاحية إدارية.
+      }
       if (!user.emailVerified) { router.replace("/verify-email?next=/account"); return; }
       setAccountState("loading");
       try {

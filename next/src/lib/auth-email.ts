@@ -7,7 +7,9 @@ import { adminAuth } from "@/lib/firebase/admin";
 export type AuthEmailStatus = "sent" | "already-verified" | "unavailable";
 
 function appOrigin() {
-  const rawValue = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  const configured = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  const vercelHost = process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim() || process.env.VERCEL_URL?.trim();
+  const rawValue = configured || (vercelHost ? `https://${vercelHost}` : "");
   if (!rawValue) return null;
   try {
     const value = new URL(rawValue);

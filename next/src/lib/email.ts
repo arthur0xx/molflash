@@ -34,7 +34,9 @@ function smtpConfiguration() {
   const port = Number.isInteger(portValue) && portValue > 0 && portValue < 65536 ? portValue : 587;
   const host = genericHost || "smtp.gmail.com";
   const senderName = process.env.EMAIL_FROM_NAME?.trim() || process.env.GMAIL_SMTP_SENDER_NAME?.trim() || "ChriGsm";
-  const senderEmail = process.env.EMAIL_FROM_EMAIL?.trim() || user;
+  const configuredSender = process.env.EMAIL_FROM_EMAIL?.trim();
+  // Gmail يرفض أو يضعف تسليم الرسائل عندما يختلف From عن الحساب المصادق؛ مزود SMTP مخصص يمكنه استخدام نطاقه الموثق.
+  const senderEmail = genericHost ? (configuredSender || user) : user;
   const replyTo = process.env.EMAIL_REPLY_TO?.trim() || senderEmail;
   const secure = process.env.EMAIL_SMTP_SECURE === "true" || (!genericHost && port === 465);
   return { host, port, secure, user, password, senderName, senderEmail, replyTo };
@@ -179,7 +181,7 @@ export async function sendAuthEmail({ to, actionUrl, kind }: AuthEmailInput) {
   const result = await transporter.sendMail({
     from: { name: config.senderName.replace(/[\r\n]/g, " "), address: config.senderEmail },
     replyTo: config.replyTo,
-    headers: { "X-Entity-Ref-ID": `chrigsm-auth-${kind}`, "Auto-Submitted": "auto-generated" },
+    headers: { "X-Entity-Ref-ID": `chrigsm-auth-${kind}`, "X-Auto-Response-Suppress": "All" },
     to,
     subject: content.subject,
     text: content.text,

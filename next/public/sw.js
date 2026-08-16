@@ -1,4 +1,4 @@
-const CACHE_NAME = "chrigsm-shell-v1";
+const CACHE_NAME = "chrigsm-shell-v2-auth-repair";
 const APP_SHELL = ["/", "/catalog", "/icon.png", "/apple-icon.png"];
 
 self.addEventListener("install", (event) => {

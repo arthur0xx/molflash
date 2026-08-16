@@ -8,9 +8,10 @@ const contentSecurityPolicy = [
   "object-src 'none'",
   "img-src 'self' data: https:",
   "style-src 'self' 'unsafe-inline'",
-  "script-src 'self' 'unsafe-inline'",
+  "script-src 'self' 'unsafe-inline' https://accounts.google.com",
   "font-src 'self' data:",
-  "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com wss://*.firebaseio.com",
+  "frame-src 'self' https://*.firebaseapp.com https://accounts.google.com https://*.google.com",
+  "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://accounts.google.com https://api.cloudinary.com wss://*.firebaseio.com",
 ].join("; ");
 
 const nextConfig: NextConfig = {
@@ -29,7 +30,8 @@ const nextConfig: NextConfig = {
         { key: "X-Frame-Options", value: "DENY" },
         { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
         { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=()" },
-        { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+        // Google signInWithPopup يحتاج السماح بإغلاق/تواصل نافذة OAuth مع الصفحة الأصلية.
+        { key: "Cross-Origin-Opener-Policy", value: "same-origin-allow-popups" },
         { key: "Cross-Origin-Resource-Policy", value: "same-origin" },
         { key: "X-Permitted-Cross-Domain-Policies", value: "none" },
       ],
