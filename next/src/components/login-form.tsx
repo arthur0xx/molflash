@@ -76,11 +76,11 @@ export function LoginForm() {
     setError("");
     const result = await signInWithGoogle();
     setSubmittingGoogle(false);
-    if (result === "existing-account") {
+    if (result.status === "existing-account") {
       setError("هذا البريد مرتبط بطريقة دخول أخرى. سجّل الدخول بالبريد وكلمة المرور أولًا.");
       return;
     }
-    if (result !== "signed-in") {
+    if (result.status !== "signed-in") {
       setError("تعذر تسجيل الدخول عبر Google حاليًا. حاول مرة أخرى.");
       return;
     }
@@ -88,6 +88,10 @@ export function LoginForm() {
     const session = await refreshAuthSession();
     if (!session) {
       setError("تعذر فتح جلسة الحساب بعد تسجيل الدخول عبر Google.");
+      return;
+    }
+    if (session.role === "customer" && result.needsPhoneVerification) {
+      router.push(`/phone-verification?next=${encodeURIComponent(safeNext)}&first=1`);
       return;
     }
     router.push(session.role === "admin" || session.role === "manager" ? "/admin" : safeNext);

@@ -8,7 +8,7 @@ export type AuthSession = { uid: string; role: Role; fullName: string; phone: st
 export type PasswordResetResult = "sent" | "invalid-email" | "unavailable";
 export type RegistrationResult = "created" | "email-in-use" | "weak-password" | "invalid-email" | "verification-unavailable" | "unavailable";
 export type VerificationResult = "sent" | "already-verified" | "unavailable";
-export type GoogleSignInResult = "signed-in" | "existing-account" | "unavailable";
+export type GoogleSignInResult = { status: "signed-in" | "existing-account" | "unavailable"; isNewUser?: boolean; needsPhoneVerification?: boolean };
 
 type FirebaseUserLike = {
   uid: string;
@@ -129,7 +129,7 @@ export async function signIn(email: string, password: string): Promise<AuthSessi
 export async function signInWithGoogle(): Promise<GoogleSignInResult> {
   const { GoogleAuthProvider, deleteUser, firebaseServices, getAdditionalUserInfo, signInWithPopup, signOut: firebaseSignOut } = await authModules();
   const services = firebaseServices();
-  if (!services) return "unavailable";
+  if (!services) return { status: "unavailable" };
 
   try {
     const provider = new GoogleAuthProvider();
@@ -147,15 +147,17 @@ export async function signInWithGoogle(): Promise<GoogleSignInResult> {
       const details = getAdditionalUserInfo(credential);
       if (details?.isNewUser) await deleteUser(credential.user).catch(() => undefined);
       await firebaseSignOut(services.auth).catch(() => undefined);
-      return "unavailable";
+      return { status: "unavailable" };
     }
 
-    persist(await firebaseSession(user));
-    return "signed-in";
+    const details = getAdditionalUserInfo(credential);
+    const session = await firebaseSession(user);
+    persist(session);
+    return { status: "signed-in", isNewUser: details?.isNewUser === true, needsPhoneVerification: details?.isNewUser === true && !session.phone };
   } catch (reason) {
     const code = typeof reason === "object" && reason && "code" in reason ? String(reason.code) : "";
-    if (code === "auth/account-exists-with-different-credential") return "existing-account";
-    return "unavailable";
+    if (code === "auth/account-exists-with-different-credential") return { status: "existing-account" };
+    return { status: "unavailable" };
   }
 }
 
@@ -252,4 +254,29 @@ export function signOut() {
     const services = firebaseServices();
     if (services) await firebaseSignOut(services.auth).catch(() => undefined);
   })();
+}
+
+export async function requestPhoneVerification(phone: string): Promise<{ ok: boolean; message?: string }> {
+  const { firebaseServices } = await authModules();
+  const user = firebaseServices()?.auth.currentUser;
+  if (!user) return { ok: false, message: "سجّل الدخول أولًا." };
+  try {
+    const token = await user.getIdToken();
+    const response = await fetch("/api/account/phone-verification/request", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${token}` }, body: JSON.stringify({ phone }) });
+    const body = await response.json().catch(() => null) as { error?: string } | null;
+    return response.ok ? { ok: true } : { ok: false, message: body?.error || "تعذر إرسال الرمز." };
+  } catch { return { ok: false, message: "تعذر الاتصال بخدمة التحقق." }; }
+}
+
+export async function confirmPhoneVerification(code: string): Promise<{ ok: boolean; message?: string }> {
+  const { firebaseServices } = await authModules();
+  const user = firebaseServices()?.auth.currentUser;
+  if (!user) return { ok: false, message: "انتهت الجلسة. سجّل الدخول مرة أخرى." };
+  try {
+    const token = await user.getIdToken();
+    const response = await fetch("/api/account/phone-verification/confirm", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${token}` }, body: JSON.stringify({ code }) });
+    const body = await response.json().catch(() => null) as { error?: string } | null;
+    if (response.ok) { await refreshAuthSession(); return { ok: true }; }
+    return { ok: false, message: body?.error || "رمز التحقق غير صحيح." };
+  } catch { return { ok: false, message: "تعذر الاتصال بخدمة التحقق." }; }
 }
