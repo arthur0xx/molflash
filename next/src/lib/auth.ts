@@ -8,7 +8,7 @@ export type AuthSession = { uid: string; role: Role; fullName: string; phone: st
 export type PasswordResetResult = "sent" | "invalid-email" | "unavailable";
 export type RegistrationResult = "created" | "email-in-use" | "weak-password" | "invalid-email" | "verification-unavailable" | "unavailable";
 export type VerificationResult = "sent" | "already-verified" | "unavailable";
-export type GoogleSignInResult = { status: "signed-in" | "existing-account" | "unavailable"; isNewUser?: boolean; needsPhoneVerification?: boolean };
+export type GoogleSignInResult = { status: "signed-in" | "existing-account" | "redirecting" | "unavailable"; isNewUser?: boolean; needsPhoneVerification?: boolean; errorCode?: string };
 
 type FirebaseUserLike = {
   uid: string;
@@ -34,11 +34,11 @@ function validEmail(value: string) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(va
 
 async function authModules() {
   const [
-    { GoogleAuthProvider, applyActionCode, confirmPasswordReset, createUserWithEmailAndPassword, deleteUser, getAdditionalUserInfo, getIdTokenResult, onAuthStateChanged, reload, signInWithEmailAndPassword, signInWithPopup, signOut, updateProfile, verifyPasswordResetCode },
+    { GoogleAuthProvider, applyActionCode, confirmPasswordReset, createUserWithEmailAndPassword, deleteUser, getAdditionalUserInfo, getIdTokenResult, getRedirectResult, onAuthStateChanged, reload, signInWithEmailAndPassword, signInWithPopup, signInWithRedirect, signOut, updateProfile, verifyPasswordResetCode },
     { doc, getDoc },
     { firebaseServices },
   ] = await Promise.all([import("firebase/auth"), import("firebase/firestore"), import("@/lib/firebase/client")]);
-  return { GoogleAuthProvider, applyActionCode, confirmPasswordReset, createUserWithEmailAndPassword, deleteUser, getAdditionalUserInfo, getIdTokenResult, onAuthStateChanged, reload, signInWithEmailAndPassword, signInWithPopup, signOut, updateProfile, verifyPasswordResetCode, doc, getDoc, firebaseServices };
+  return { GoogleAuthProvider, applyActionCode, confirmPasswordReset, createUserWithEmailAndPassword, deleteUser, getAdditionalUserInfo, getIdTokenResult, getRedirectResult, onAuthStateChanged, reload, signInWithEmailAndPassword, signInWithPopup, signInWithRedirect, signOut, updateProfile, verifyPasswordResetCode, doc, getDoc, firebaseServices };
 }
 
 async function firebaseSession(user: FirebaseUserLike): Promise<AuthSession> {
@@ -126,41 +126,54 @@ export async function signIn(email: string, password: string): Promise<AuthSessi
   } catch { return null; }
 }
 
+async function completeGoogleCredential(credential: { user: FirebaseUserLike }, details: { isNewUser?: boolean } | null): Promise<GoogleSignInResult> {
+  const user = credential.user;
+  const token = await user.getIdToken();
+  const response = await fetch("/api/auth/register", {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+    body: JSON.stringify({ fullName: user.displayName?.trim() || user.email?.split("@")[0] || "عميل ChriGsm", phone: "" }),
+  });
+  if (!response.ok) return { status: "unavailable", errorCode: `register-${response.status}` };
+  const session = await firebaseSession(user);
+  persist(session);
+  return { status: "signed-in", isNewUser: details?.isNewUser === true, needsPhoneVerification: details?.isNewUser === true && !session.phone };
+}
+
 export async function signInWithGoogle(): Promise<GoogleSignInResult> {
-  const { GoogleAuthProvider, deleteUser, firebaseServices, getAdditionalUserInfo, signInWithPopup, signOut: firebaseSignOut } = await authModules();
+  const { GoogleAuthProvider, firebaseServices, getAdditionalUserInfo, signInWithPopup, signInWithRedirect } = await authModules();
   const services = firebaseServices();
-  if (!services) return { status: "unavailable" };
+  if (!services) return { status: "unavailable", errorCode: "firebase-not-configured" };
 
   try {
     const provider = new GoogleAuthProvider();
     provider.setCustomParameters({ prompt: "select_account" });
     const credential = await signInWithPopup(services.auth, provider);
-    const user = credential.user as FirebaseUserLike;
-    const token = await user.getIdToken();
-    const response = await fetch("/api/auth/register", {
-      method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-      body: JSON.stringify({ fullName: user.displayName?.trim() || user.email?.split("@")[0] || "عميل ChriGsm", phone: "" }),
-    });
-
-    if (!response.ok) {
-      const details = getAdditionalUserInfo(credential);
-      if (details?.isNewUser) await deleteUser(credential.user).catch(() => undefined);
-      await firebaseSignOut(services.auth).catch(() => undefined);
-      return { status: "unavailable" };
-    }
-
-    const details = getAdditionalUserInfo(credential);
-    const session = await firebaseSession(user);
-    persist(session);
-    return { status: "signed-in", isNewUser: details?.isNewUser === true, needsPhoneVerification: details?.isNewUser === true && !session.phone };
+    return await completeGoogleCredential({ user: credential.user as FirebaseUserLike }, getAdditionalUserInfo(credential));
   } catch (reason) {
     const code = typeof reason === "object" && reason && "code" in reason ? String(reason.code) : "";
-    if (code === "auth/account-exists-with-different-credential") return { status: "existing-account" };
-    return { status: "unavailable" };
+    if (code === "auth/account-exists-with-different-credential") return { status: "existing-account", errorCode: code };
+    if (["auth/popup-blocked", "auth/popup-closed-by-user", "auth/cancelled-popup-request", "auth/operation-not-supported-in-this-environment"].includes(code)) {
+      await signInWithRedirect(services.auth, new GoogleAuthProvider());
+      return { status: "redirecting", errorCode: code };
+    }
+    return { status: "unavailable", errorCode: code || "unknown" };
   }
 }
 
+export async function completeGoogleRedirect(): Promise<GoogleSignInResult | null> {
+  const { firebaseServices, getRedirectResult, getAdditionalUserInfo } = await authModules();
+  const services = firebaseServices();
+  if (!services) return null;
+  try {
+    const credential = await getRedirectResult(services.auth);
+    if (!credential) return null;
+    return await completeGoogleCredential({ user: credential.user as FirebaseUserLike }, getAdditionalUserInfo(credential));
+  } catch (reason) {
+    const code = typeof reason === "object" && reason && "code" in reason ? String(reason.code) : "";
+    return { status: "unavailable", errorCode: code || "unknown" };
+  }
+}
 export async function registerCustomer(fullName: string, phone: string, email: string, password: string): Promise<RegistrationResult> {
   const normalized = normalizedEmail(email);
   const name = fullName.trim();

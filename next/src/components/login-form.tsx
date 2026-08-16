@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { ArrowLeft, Check, LockKeyhole, Mail, Phone, ShieldCheck, UserRound } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { registerCustomer, requestPasswordReset, signIn, signInWithGoogle } from "@/lib/auth";
+import { completeGoogleRedirect, registerCustomer, requestPasswordReset, signIn, signInWithGoogle } from "@/lib/auth";
 
 const resetConfirmation = "إذا كان البريد مرتبطًا بحساب ChriGsm، ستصلك رسالة لإعادة تعيين كلمة المرور.";
 type LoginMode = "signin" | "signup" | "reset";
@@ -48,6 +48,26 @@ export function LoginForm() {
   const verificationPath = `/verify-email?next=${encodeURIComponent(safeNext)}`;
   const content = modeContent[mode];
 
+  useEffect(() => {
+    let cancelled = false;
+    void completeGoogleRedirect().then(async (result) => {
+      if (cancelled || !result) return;
+      if (result.status !== "signed-in") {
+        setError(result.errorCode === "auth/unauthorized-domain" ? "نطاق الموقع غير مضاف في Firebase Authorized Domains." : "تعذر إكمال تسجيل الدخول عبر Google.");
+        return;
+      }
+      const { refreshAuthSession } = await import("@/lib/auth");
+      const session = await refreshAuthSession();
+      if (cancelled || !session) return;
+      if (session.role === "customer" && result.needsPhoneVerification) {
+        router.replace(`/phone-verification?next=${encodeURIComponent(safeNext)}&first=1`);
+        return;
+      }
+      router.replace(session.role === "admin" || session.role === "manager" ? "/admin" : safeNext);
+    });
+    return () => { cancelled = true; };
+  }, [router, safeNext]);
+
   function setActiveMode(nextMode: LoginMode) {
     setMode(nextMode);
     setError("");
@@ -76,12 +96,18 @@ export function LoginForm() {
     setError("");
     const result = await signInWithGoogle();
     setSubmittingGoogle(false);
+    if (result.status === "redirecting") return;
     if (result.status === "existing-account") {
       setError("هذا البريد مرتبط بطريقة دخول أخرى. سجّل الدخول بالبريد وكلمة المرور أولًا.");
       return;
     }
     if (result.status !== "signed-in") {
-      setError("تعذر تسجيل الدخول عبر Google حاليًا. حاول مرة أخرى.");
+      const errorMessage = result.errorCode === "auth/unauthorized-domain"
+        ? "نطاق الموقع غير مضاف في Firebase Authorized Domains."
+        : result.errorCode?.startsWith("register-")
+          ? "تم تسجيل Google لكن تعذر إنشاء ملف الحساب. تحقق من إعداد Firebase Admin."
+          : "تعذر تسجيل الدخول عبر Google حاليًا. حاول مرة أخرى.";
+      setError(errorMessage);
       return;
     }
     const { refreshAuthSession } = await import("@/lib/auth");
