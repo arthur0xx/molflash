@@ -1,11 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { CheckCircle2, Send } from "lucide-react";
 import type { Service } from "@/lib/types";
 import { firebaseServices } from "@/lib/firebase/client";
 
 export function RequestForm({ service }: { service: Service }) {
+  const router = useRouter();
   const [submitted, setSubmitted] = useState(false);
   const [orderId, setOrderId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -27,7 +29,10 @@ export function RequestForm({ service }: { service: Service }) {
 
     try {
       const user = services.auth.currentUser;
-      if (!user) throw new Error("سجّل الدخول أولًا لإنشاء الطلب.");
+      if (!user) {
+        router.push(`/login?next=${encodeURIComponent(`/service/${service.slug}`)}`);
+        return;
+      }
       const response = await fetch("/api/orders", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${await user.getIdToken()}` }, body: JSON.stringify({ serviceId: service.id, formData: answers }) });
       const payload = await response.json().catch(() => ({})) as { id?: string; error?: string };
       if (!response.ok || !payload.id) throw new Error(payload.error || "تعذر إنشاء الطلب.");
