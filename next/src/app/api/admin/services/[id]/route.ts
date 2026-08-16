@@ -20,6 +20,10 @@ const managedImageUrl = z.string().trim().url("رابط الصورة غير صح
   try { return new URL(value).protocol === "https:" && new URL(value).hostname === "res.cloudinary.com"; } catch { return false; }
 }, "الصورة يجب أن تأتي من Cloudinary المهيأ").max(2000, "رابط الصورة طويل جدًا");
 const managedImagePublicId = z.string().trim().regex(/^chrigsm\/(?:catalog\/[a-z0-9_-]+\/[a-z0-9_-]+|services\/[a-z0-9_-]+)$/i, "معرف صورة الخدمة غير صحيح").max(220);
+const staticProductImageUrl = z.string().trim().regex(/^\/products\/[a-z0-9][a-z0-9._-]*\.(?:png|jpe?g|webp)$/i, "رابط صورة المنتج المحلية غير صحيح").max(240, "رابط الصورة طويل جدًا");
+const serviceImageUrl = z.union([managedImageUrl, staticProductImageUrl]);
+const isCloudinaryImage = (value: unknown) => typeof value === "string" && value.startsWith("https://res.cloudinary.com/");
+const isStaticProductImage = (value: unknown) => typeof value === "string" && /^\/products\/[a-z0-9][a-z0-9._-]*\.(?:png|jpe?g|webp)$/i.test(value);
 
 const updateServiceSchema = z.object({
   slug: z.string().trim().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/i, "رابط الخدمة غير صحيح").min(2).max(100).optional(),
@@ -29,7 +33,7 @@ const updateServiceSchema = z.object({
   priceMad: z.number().finite().min(0, "السعر لا يمكن أن يكون سالبًا").max(1000000, "السعر أكبر من الحد المسموح").optional(),
   delivery: z.string().trim().min(2, "مدة أو نوع التسليم مطلوب").max(200, "معلومة التسليم طويلة جدًا").optional(),
   badge: z.string().trim().max(80, "الشارة طويلة جدًا").nullable().optional(),
-  imageUrl: managedImageUrl.nullable().optional(),
+  imageUrl: serviceImageUrl.nullable().optional(),
   imagePublicId: managedImagePublicId.nullable().optional(),
   isActive: z.boolean().optional(),
   fields: z.array(dynamicFieldSchema).max(20, "عدد الحقول كبير جدًا").optional(),
@@ -39,7 +43,11 @@ const updateServiceSchema = z.object({
     if (new Set(ids).size !== ids.length) context.addIssue({ code: "custom", message: "معرفات الحقول يجب أن تكون فريدة" });
   }
   const imageSupplied = Object.prototype.hasOwnProperty.call(service, "imageUrl") || Object.prototype.hasOwnProperty.call(service, "imagePublicId");
-  if (imageSupplied && Boolean(service.imageUrl) !== Boolean(service.imagePublicId)) context.addIssue({ code: "custom", message: "الصورة المرفوعة تحتاج رابطًا ومعرفًا صالحين من Cloudinary" });
+  if (!imageSupplied) return;
+  if (service.imageUrl === null && service.imagePublicId === null) return;
+  if (isCloudinaryImage(service.imageUrl) && service.imagePublicId) return;
+  if (isStaticProductImage(service.imageUrl) && !service.imagePublicId) return;
+  context.addIssue({ code: "custom", message: "الصورة المرفوعة تحتاج رابطًا ومعرفًا صالحين من Cloudinary، أو مسارًا ثابتًا آمنًا من مجلد المنتجات" });
 });
 
 function cleanupServiceAsset(publicId: string) {
