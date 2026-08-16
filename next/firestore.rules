@@ -2,7 +2,8 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
-    function admin() { return signedIn() && request.auth.token.role == 'admin'; }
+    // تظل قراءة SDK المباشرة محصورة في المالك الكامل؛ صلاحيات manager تمر عبر مسارات API خادمية محددة.
+    function owner() { return signedIn() && (request.auth.token.role == 'admin' || request.auth.token.role == 'owner'); }
     function ownsCustomer(customerId) { return signedIn() && request.auth.uid == customerId; }
     function activeCustomer() {
       let customer = get(/databases/$(database)/documents/customers/$(request.auth.uid)).data;
@@ -16,7 +17,7 @@ service cloud.firestore {
       allow write: if false;
     }
     match /services/{serviceId} {
-      allow read: if resource.data.isActive == true || admin();
+      allow read: if resource.data.isActive == true || owner();
       // تتطلب جميع كتابات CMC تحققًا خادميًا وسجل تدقيق؛ لا كتابة مباشرة من العميل.
       allow write: if false;
     }
@@ -25,24 +26,24 @@ service cloud.firestore {
       allow read, write: if false;
     }
     match /customers/{customerId} {
-      allow read: if admin() || activeOwner(customerId);
+      allow read: if owner() || activeOwner(customerId);
       // تعديلات الرصيد تتم ذريًا في مسار خادمي يضيف قيد محفظة وسجل تدقيق؛ لا كتابة مباشرة من العميل حتى للمدير.
       allow write: if false;
     }
     match /orders/{orderId} {
-      allow read: if admin() || (activeCustomer() && resource.data.customerId == request.auth.uid);
+      allow read: if owner() || (activeCustomer() && resource.data.customerId == request.auth.uid);
       allow write: if false;
     }
     match /walletEntries/{entryId} {
-      allow read: if admin() || (activeCustomer() && resource.data.customerId == request.auth.uid);
+      allow read: if owner() || (activeCustomer() && resource.data.customerId == request.auth.uid);
       allow write: if false;
     }
     match /supportTickets/{ticketId} {
-      allow read: if admin() || (activeCustomer() && resource.data.customerId == request.auth.uid);
+      allow read: if owner() || (activeCustomer() && resource.data.customerId == request.auth.uid);
       // الرسائل والردود تمر عبر مسارات خادمية تتحقق من الهوية وتسجل التدقيق؛ لا كتابة مباشرة.
       allow write: if false;
     }
-    match /auditLogs/{logId} { allow read: if admin(); allow write: if false; }
+    match /auditLogs/{logId} { allow read: if owner(); allow write: if false; }
     // رموز تأكيد الهاتف وسجل قنوات الإشعار يحتويان بيانات تشغيلية حساسة؛ لا يُسمح لهما بأي وصول SDK مباشر.
     match /phoneVerificationChallenges/{challengeId} { allow read, write: if false; }
     match /notificationLogs/{notificationId} { allow read, write: if false; }

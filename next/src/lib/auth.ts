@@ -9,6 +9,7 @@ export type PasswordResetResult = "sent" | "invalid-email" | "unavailable";
 export type RegistrationResult = "created" | "email-in-use" | "weak-password" | "invalid-email" | "verification-unavailable" | "unavailable";
 export type VerificationResult = "sent" | "already-verified" | "unavailable";
 export type GoogleSignInResult = { status: "signed-in" | "existing-account" | "redirecting" | "unavailable"; isNewUser?: boolean; needsPhoneVerification?: boolean; errorCode?: string };
+export type GoogleAccountLinkResult = "linked" | "already-linked" | "redirecting" | "conflict" | "signed-out" | "unavailable";
 
 type FirebaseUserLike = {
   uid: string;
@@ -34,11 +35,11 @@ function validEmail(value: string) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(va
 
 async function authModules() {
   const [
-    { GoogleAuthProvider, applyActionCode, confirmPasswordReset, createUserWithEmailAndPassword, deleteUser, getAdditionalUserInfo, getIdTokenResult, getRedirectResult, onAuthStateChanged, reload, signInWithEmailAndPassword, signInWithPopup, signInWithRedirect, signOut, updateProfile, verifyPasswordResetCode },
+    { GoogleAuthProvider, applyActionCode, confirmPasswordReset, createUserWithEmailAndPassword, deleteUser, getAdditionalUserInfo, getIdTokenResult, getRedirectResult, linkWithPopup, linkWithRedirect, onAuthStateChanged, reload, signInWithEmailAndPassword, signInWithPopup, signInWithRedirect, signOut, updateProfile, verifyPasswordResetCode },
     { doc, getDoc },
     { firebaseServices },
   ] = await Promise.all([import("firebase/auth"), import("firebase/firestore"), import("@/lib/firebase/client")]);
-  return { GoogleAuthProvider, applyActionCode, confirmPasswordReset, createUserWithEmailAndPassword, deleteUser, getAdditionalUserInfo, getIdTokenResult, getRedirectResult, onAuthStateChanged, reload, signInWithEmailAndPassword, signInWithPopup, signInWithRedirect, signOut, updateProfile, verifyPasswordResetCode, doc, getDoc, firebaseServices };
+  return { GoogleAuthProvider, applyActionCode, confirmPasswordReset, createUserWithEmailAndPassword, deleteUser, getAdditionalUserInfo, getIdTokenResult, getRedirectResult, linkWithPopup, linkWithRedirect, onAuthStateChanged, reload, signInWithEmailAndPassword, signInWithPopup, signInWithRedirect, signOut, updateProfile, verifyPasswordResetCode, doc, getDoc, firebaseServices };
 }
 
 async function firebaseSession(user: FirebaseUserLike): Promise<AuthSession> {
@@ -171,9 +172,53 @@ export async function completeGoogleRedirect(): Promise<GoogleSignInResult | nul
     return await completeGoogleCredential({ user: credential.user as FirebaseUserLike }, getAdditionalUserInfo(credential));
   } catch (reason) {
     const code = typeof reason === "object" && reason && "code" in reason ? String(reason.code) : "";
+    if (code === "auth/account-exists-with-different-credential") return { status: "existing-account", errorCode: code };
     return { status: "unavailable", errorCode: code || "unknown" };
   }
 }
+export async function linkGoogleToCurrentUser(): Promise<GoogleAccountLinkResult> {
+  const { GoogleAuthProvider, firebaseServices, linkWithPopup, linkWithRedirect } = await authModules();
+  const services = firebaseServices();
+  const user = services?.auth.currentUser;
+  if (!user) return "signed-out";
+  const provider = new GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: "select_account" });
+
+  try {
+    await linkWithPopup(user, provider);
+    return "linked";
+  } catch (reason) {
+    const code = typeof reason === "object" && reason && "code" in reason ? String(reason.code) : "";
+    if (code === "auth/provider-already-linked") return "already-linked";
+    if (code === "auth/credential-already-in-use") return "conflict";
+    if (["auth/popup-blocked", "auth/popup-closed-by-user", "auth/cancelled-popup-request", "auth/operation-not-supported-in-this-environment"].includes(code)) {
+      try {
+        await linkWithRedirect(user, provider);
+        return "redirecting";
+      } catch (redirectReason) {
+        const redirectCode = typeof redirectReason === "object" && redirectReason && "code" in redirectReason ? String(redirectReason.code) : "";
+        return redirectCode === "auth/credential-already-in-use" ? "conflict" : "unavailable";
+      }
+    }
+    return "unavailable";
+  }
+}
+
+export async function completeGoogleLinkRedirect(): Promise<GoogleAccountLinkResult | null> {
+  const { firebaseServices, getRedirectResult } = await authModules();
+  const services = firebaseServices();
+  if (!services) return "unavailable";
+  try {
+    const credential = await getRedirectResult(services.auth);
+    return credential ? "linked" : null;
+  } catch (reason) {
+    const code = typeof reason === "object" && reason && "code" in reason ? String(reason.code) : "";
+    if (code === "auth/provider-already-linked") return "already-linked";
+    if (code === "auth/credential-already-in-use") return "conflict";
+    return "unavailable";
+  }
+}
+
 export async function registerCustomer(fullName: string, phone: string, email: string, password: string): Promise<RegistrationResult> {
   const normalized = normalizedEmail(email);
   const name = fullName.trim();

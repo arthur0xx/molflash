@@ -53,7 +53,14 @@ export function LoginForm() {
     void completeGoogleRedirect().then(async (result) => {
       if (cancelled || !result) return;
       if (result.status !== "signed-in") {
-        setError(result.errorCode === "auth/unauthorized-domain" ? "نطاق الموقع غير مضاف في Firebase Authorized Domains." : "تعذر إكمال تسجيل الدخول عبر Google.");
+        const message = result.status === "existing-account"
+          ? "هذا البريد مرتبط بحساب ChriGsm بالبريد وكلمة المرور. سجّل الدخول بهذه الطريقة أولًا."
+          : result.errorCode === "auth/unauthorized-domain"
+            ? "نطاق الموقع غير مضاف في Firebase Authorized Domains."
+            : result.errorCode?.startsWith("register-")
+              ? "تمت مصادقة Google، لكن تعذر إعداد ملف الحساب. حاول مرة أخرى أو تواصل مع الدعم."
+              : "تعذر إكمال تسجيل الدخول عبر Google. حاول مرة أخرى.";
+        setError(message);
         return;
       }
       const { refreshAuthSession } = await import("@/lib/auth");

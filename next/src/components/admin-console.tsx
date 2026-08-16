@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { onAuthStateChanged } from "firebase/auth";
-import { Ban, Boxes, CreditCard, FolderTree, MessageCircle, Pencil, Plus, Send, Settings2, ShieldCheck, Trash2, UserRound, UserX, UsersRound } from "lucide-react";
+import { Ban, Boxes, CreditCard, FolderTree, MessageCircle, Pencil, Plus, Send, Settings2, ShieldAlert, ShieldCheck, Trash2, UserRound, UserX, UsersRound } from "lucide-react";
 import type { Category, Customer, StoreSnapshot, Order, OrderStatus, Service, SupportTicket } from "@/lib/types";
 import { formatMAD, statusLabels } from "@/lib/types";
 import { firebaseServices } from "@/lib/firebase/client";
@@ -25,9 +25,10 @@ type MediaStatus = { configured: boolean; cloudName?: string };
 const emptyCategoryForm = (order: number): CategoryForm => ({ name: "", icon: "Folder", color: "#1479FF", description: "", order: String(order), isActive: true });
 const emptyServiceForm = (categoryId = ""): ServiceForm => ({ slug: "", title: "", categoryId, description: "", priceMad: "", delivery: "", badge: "", imageUrl: "", imagePublicId: "", isActive: false });
 const walletBalance = (value: unknown) => typeof value === "number" && Number.isFinite(value) ? value : 0;
+const emptySnapshot = (): StoreSnapshot => ({ categories: [], services: [], customers: [], orders: [], walletEntries: [] });
 
-export function AdminConsole({ initial }: { initial: StoreSnapshot }) {
-  const [data, setData] = useState(initial);
+export function AdminConsole() {
+  const [data, setData] = useState<StoreSnapshot>(() => emptySnapshot());
   const [tab, setTab] = useState<Tab>("overview");
   const [session] = useState(() => typeof window === "undefined" ? null : getAuthSession());
   const isManager = session?.role === "manager";
@@ -36,14 +37,15 @@ export function AdminConsole({ initial }: { initial: StoreSnapshot }) {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [typedName, setTypedName] = useState("");
   const firebase = useMemo(() => firebaseServices(), []);
-  const [notice, setNotice] = useState("مرحبًا بك في لوحة إدارة ChriGsm.");
+  const [notice, setNotice] = useState(() => firebase ? "جارٍ تحميل بيانات CMC المحمية..." : "إعداد Firebase غير متاح حاليًا. لا يمكن عرض بيانات الإدارة بأمان.");
+  const [snapshotState, setSnapshotState] = useState<"loading" | "ready" | "error">(() => firebase ? "loading" : "error");
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [deliveryDrafts, setDeliveryDrafts] = useState<Record<string, string>>({});
   const [deliveryNotes, setDeliveryNotes] = useState<Record<string, string>>({});
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [editor, setEditor] = useState<Editor>(null);
-  const [categoryForm, setCategoryForm] = useState<CategoryForm>(() => emptyCategoryForm(initial.categories.length + 1));
-  const [serviceForm, setServiceForm] = useState<ServiceForm>(() => emptyServiceForm(initial.categories.find((category) => category.isActive)?.id));
+  const [categoryForm, setCategoryForm] = useState<CategoryForm>(() => emptyCategoryForm(1));
+  const [serviceForm, setServiceForm] = useState<ServiceForm>(() => emptyServiceForm());
   const [isSaving, setIsSaving] = useState(false);
   const [walletReasons, setWalletReasons] = useState<Record<string, string>>({});
   const [walletAmounts, setWalletAmounts] = useState<Record<string, string>>({});
@@ -79,6 +81,42 @@ export function AdminConsole({ initial }: { initial: StoreSnapshot }) {
         setMediaStatus(response.ok ? result : { configured: false });
       } catch { setMediaStatus({ configured: false }); }
     });
+  }, [firebase]);
+
+  useEffect(() => {
+    let active = true;
+    if (!firebase) return;
+
+    const unsubscribe = onAuthStateChanged(firebase.auth, async (user) => {
+      if (!user) {
+        if (active) {
+          setData(emptySnapshot());
+          setSnapshotState("error");
+          setNotice("انتهت جلسة الإدارة. سجّل الدخول من جديد.");
+        }
+        return;
+      }
+
+      try {
+        if (active) setSnapshotState("loading");
+        const response = await fetch("/api/admin/snapshot", { headers: { Authorization: `Bearer ${await user.getIdToken()}` } });
+        const result = await response.json().catch(() => ({})) as { snapshot?: StoreSnapshot; error?: string };
+        if (!response.ok || !result.snapshot) throw new Error(result.error || "تعذر تحميل بيانات CMC.");
+        if (active) {
+          setData(result.snapshot);
+          setSnapshotState("ready");
+          setNotice("تم تحميل بيانات CMC عبر جلسة الإدارة المحمية.");
+        }
+      } catch (reason) {
+        if (active) {
+          setData(emptySnapshot());
+          setSnapshotState("error");
+          setNotice(reason instanceof Error ? reason.message : "تعذر تحميل بيانات CMC.");
+        }
+      }
+    });
+
+    return () => { active = false; unsubscribe(); };
   }, [firebase]);
 
   const allOrders = useMemo<DisplayOrder[]>(() => data.orders, [data.orders]);
@@ -329,6 +367,9 @@ export function AdminConsole({ initial }: { initial: StoreSnapshot }) {
       setIsSaving(false);
     }
   }
+
+  if (snapshotState === "loading") return <div className="access-state"><span className="brand-mark">CG</span><p>جارٍ تحميل بيانات CMC المحمية...</p></div>;
+  if (snapshotState === "error") return <div className="access-state"><span className="access-icon"><ShieldAlert size={30}/></span><p className="eyebrow">تعذر فتح CMC</p><h1>لا يمكن تحميل بيانات الإدارة الآن</h1><p>{notice}</p><button type="button" className="primary-button" onClick={() => window.location.reload()}>إعادة المحاولة</button></div>;
 
   return <div className="admin-console"><aside className="cmc-sidebar"><div className="cmc-title">ChriGsm <b>CMC</b></div><nav>{navItems.map(([id, label]) => <button className={tab === id ? "active" : ""} onClick={() => setTab(id)} key={id}>{label}</button>)}</nav><div className="cmc-summary"><b>لوحة الإدارة</b><span>أدر الطلبات والخدمات والعملاء من مكان واحد</span></div></aside><section className="cmc-content"><header className="cmc-heading"><div><p className="eyebrow">إدارة العمليات</p><h1>{tabTitles[tab]}</h1></div><span className="live-pill"><span/> إدارة المتجر</span></header><p className="admin-notice">{notice}</p><AdminOnboardingTour role={isManager ? "manager" : "admin"}/>
     {tab === "overview" && <><div className="metric-grid"><Metric icon={<UsersRound/>} label="عملاء نشطون" value={String(data.customers.length)} note="حسابات مسجلة"/><Metric icon={<Boxes/>} label="طلبات جديدة" value={String(allOrders.filter((item) => item.status === "new").length)} note="تصل من المتجر"/><Metric icon={<FolderTree/>} label="قيد المعالجة" value={String(processing)} note="بيانات مقفلة للعميل"/><Metric icon={<CreditCard/>} label="إجمالي الأرصدة" value={formatMAD(totalWallet)} note="محافظ العملاء"/></div><section className="cmc-card"><h2>آخر الطلبات</h2><OrderGrid orders={allOrders} data={data} onStatus={updateOrder} deliveryDrafts={deliveryDrafts} deliveryNotes={deliveryNotes} onDeliveryDraft={setDeliveryDrafts} onDeliveryNote={setDeliveryNotes} onSendDelivery={sendDelivery}/></section></>}

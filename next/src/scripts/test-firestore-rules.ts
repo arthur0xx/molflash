@@ -87,7 +87,17 @@ async function run() {
     await assertFails(setDoc(doc(adminClient, "customers", "customer-one"), { walletMad: 9999 }, { merge: true }));
     await assertFails(setDoc(doc(adminClient, "walletEntries", "wallet-admin-direct"), { customerId: "customer-one", amountMad: 1, reason: "يجب أن يفشل" }));
 
-    console.log("Firestore rules passed: visitor, customer isolation, blocked-account access, support tickets, supplier costs, and direct wallet/CMC writes are protected.");
+    const ownerClient = environment.authenticatedContext("owner-user", { role: "owner" }).firestore();
+    await assertSucceeds(getDoc(doc(ownerClient, "customers", "customer-one")));
+    await assertSucceeds(getDoc(doc(ownerClient, "orders", "order-one")));
+    await assertFails(setDoc(doc(ownerClient, "customers", "customer-one"), { walletMad: 9999 }, { merge: true }));
+
+    const managerClient = environment.authenticatedContext("manager-user", { role: "manager", managerPermissions: { orders: true, support: true } }).firestore();
+    await assertFails(getDoc(doc(managerClient, "customers", "customer-one")));
+    await assertFails(getDoc(doc(managerClient, "orders", "order-one")));
+    await assertFails(getDoc(doc(managerClient, "walletEntries", "wallet-one")));
+
+    console.log("Firestore rules passed: visitor, customer isolation, blocked-account access, owner claims, manager SDK denial, supplier costs, and direct wallet/CMC writes are protected.");
   } finally {
     await environment.cleanup();
   }
