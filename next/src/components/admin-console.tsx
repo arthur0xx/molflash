@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { Ban, Boxes, CreditCard, FolderTree, MessageCircle, Pencil, Plus, Send, Settings2, ShieldAlert, ShieldCheck, Trash2, UserRound, UserX, UsersRound } from "lucide-react";
-import type { Category, Customer, StoreSnapshot, Order, OrderStatus, Service, SupportTicket } from "@/lib/types";
+import type { Category, Customer, DynamicField, StoreSnapshot, Order, OrderStatus, Service, SupportTicket } from "@/lib/types";
 import { formatMAD, statusLabels } from "@/lib/types";
 import { firebaseServices } from "@/lib/firebase/client";
 import { AdminSessionControls } from "@/components/admin-session-controls";
@@ -19,13 +19,45 @@ type Tab = "overview" | "orders" | "products" | "categories" | "customers" | "su
 type DisplayOrder = Order;
 type Editor = { kind: "category" | "service"; mode: "create" | "edit"; id?: string } | null;
 type CategoryForm = { name: string; icon: string; color: string; description: string; order: string; isActive: boolean };
-type ServiceForm = { slug: string; title: string; categoryId: string; description: string; priceMad: string; delivery: string; badge: string; imageUrl: string; imagePublicId: string; isActive: boolean };
+type ServiceForm = { slug: string; title: string; categoryId: string; description: string; priceMad: string; delivery: string; badge: string; imageUrl: string; imagePublicId: string; isActive: boolean; fields: DynamicField[] };
 type MediaStatus = { configured: boolean; cloudName?: string };
 
 const emptyCategoryForm = (order: number): CategoryForm => ({ name: "", icon: "Folder", color: "#1479FF", description: "", order: String(order), isActive: true });
-const emptyServiceForm = (categoryId = ""): ServiceForm => ({ slug: "", title: "", categoryId, description: "", priceMad: "", delivery: "", badge: "", imageUrl: "", imagePublicId: "", isActive: false });
+const emptyServiceForm = (categoryId = ""): ServiceForm => ({ slug: "", title: "", categoryId, description: "", priceMad: "", delivery: "", badge: "", imageUrl: "", imagePublicId: "", isActive: false, fields: [] });
 const walletBalance = (value: unknown) => typeof value === "number" && Number.isFinite(value) ? value : 0;
 const emptySnapshot = (): StoreSnapshot => ({ categories: [], services: [], customers: [], orders: [], walletEntries: [] });
+
+const dynamicFieldTypes: { value: DynamicField["type"]; label: string }[] = [
+  { value: "text", label: "نص قصير" },
+  { value: "email", label: "بريد إلكتروني" },
+  { value: "select", label: "قائمة اختيار" },
+  { value: "textarea", label: "ملاحظة طويلة" },
+];
+
+function normalizeDynamicFields(fields: DynamicField[]): DynamicField[] {
+  if (fields.length > 20) throw new Error("الحد الأقصى هو 20 حقلًا لكل خدمة.");
+  const seenIds = new Set<string>();
+
+  return fields.map((field, index) => {
+    const id = field.id.trim();
+    const label = field.label.trim();
+    const placeholder = field.placeholder?.trim();
+    if (!/^[a-z0-9-]{2,50}$/i.test(id)) throw new Error(`الحقل ${index + 1}: استخدم معرفًا من 2 إلى 50 حرفًا أو رقمًا أو شرطة فقط.`);
+    if (seenIds.has(id.toLowerCase())) throw new Error(`معرف الحقل «${id}» مكرر.`);
+    if (label.length < 2 || label.length > 120) throw new Error(`الحقل ${index + 1}: اكتب اسمًا من 2 إلى 120 حرفًا.`);
+    if (placeholder && placeholder.length > 160) throw new Error(`الحقل ${index + 1}: النص المساعد طويل جدًا.`);
+    seenIds.add(id.toLowerCase());
+
+    if (field.type === "select") {
+      const options = (field.options || []).map((option) => option.trim()).filter(Boolean);
+      if (!options.length) throw new Error(`الحقل «${label}» يحتاج خيارًا واحدًا على الأقل.`);
+      if (options.length > 50) throw new Error(`الحقل «${label}» يتجاوز الحد الأقصى للخيارات.`);
+      return { id, label, type: field.type, required: field.required, ...(placeholder ? { placeholder } : {}), options };
+    }
+
+    return { id, label, type: field.type, required: field.required, ...(placeholder ? { placeholder } : {}) };
+  });
+}
 
 export function AdminConsole() {
   const [data, setData] = useState<StoreSnapshot>(() => emptySnapshot());
@@ -287,7 +319,7 @@ export function AdminConsole() {
   function openServiceEditor(categoryId?: string, service?: Service) {
     if (!firebase) { setNotice("سجّل الدخول بحساب مدير لتعديل الخدمات."); return; }
     if (service) {
-      setServiceForm({ slug: service.slug, title: service.title, categoryId: service.categoryId, description: service.description, priceMad: String(service.priceMad), delivery: service.delivery, badge: service.badge || "", imageUrl: service.imageUrl || "", imagePublicId: service.imagePublicId || "", isActive: service.isActive });
+      setServiceForm({ slug: service.slug, title: service.title, categoryId: service.categoryId, description: service.description, priceMad: String(service.priceMad), delivery: service.delivery, badge: service.badge || "", imageUrl: service.imageUrl || "", imagePublicId: service.imagePublicId || "", isActive: service.isActive, fields: Array.isArray(service.fields) ? service.fields : [] });
       setEditor({ kind: "service", mode: "edit", id: service.id });
     } else {
       setServiceForm(emptyServiceForm(categoryId || activeCategories[0]?.id));
@@ -315,15 +347,15 @@ export function AdminConsole() {
       } else {
         const priceMad = Number(serviceForm.priceMad);
         if (!Number.isFinite(priceMad) || priceMad < 0) throw new Error("أدخل سعرًا صالحًا بالدرهم المغربي.");
-        const existing = editor.id ? data.services.find((service) => service.id === editor.id) : undefined;
-        const basePayload = { slug: serviceForm.slug.trim(), title: serviceForm.title.trim(), categoryId: serviceForm.categoryId, description: serviceForm.description.trim(), priceMad, delivery: serviceForm.delivery.trim(), imageUrl: serviceForm.imageUrl.trim() || undefined, imagePublicId: serviceForm.imagePublicId.trim() || undefined, isActive: serviceForm.isActive };
+        const fields = normalizeDynamicFields(serviceForm.fields);
+        const basePayload = { slug: serviceForm.slug.trim(), title: serviceForm.title.trim(), categoryId: serviceForm.categoryId, description: serviceForm.description.trim(), priceMad, delivery: serviceForm.delivery.trim(), imageUrl: serviceForm.imageUrl.trim() || undefined, imagePublicId: serviceForm.imagePublicId.trim() || undefined, isActive: serviceForm.isActive, fields };
         if (editor.mode === "create") {
-          const result = await adminRequest<{ service: Service }>("/api/admin/services", "POST", { ...basePayload, badge: serviceForm.badge.trim() || undefined, fields: [] });
+          const result = await adminRequest<{ service: Service }>("/api/admin/services", "POST", { ...basePayload, badge: serviceForm.badge.trim() || undefined });
           setData((previous) => ({ ...previous, services: [...previous.services, result.service] }));
           setOpenFolder(result.service.categoryId);
           setNotice(`تمت إضافة الخدمة «${result.service.title}».`);
         } else {
-          const result = await adminRequest<{ service: Service }>(`/api/admin/services/${editor.id}`, "PATCH", { ...basePayload, imageUrl: serviceForm.imageUrl.trim() || null, imagePublicId: serviceForm.imagePublicId.trim() || null, badge: serviceForm.badge.trim() || null, fields: existing?.fields || [] });
+          const result = await adminRequest<{ service: Service }>(`/api/admin/services/${editor.id}`, "PATCH", { ...basePayload, imageUrl: serviceForm.imageUrl.trim() || null, imagePublicId: serviceForm.imagePublicId.trim() || null, badge: serviceForm.badge.trim() || null });
           setData((previous) => ({ ...previous, services: previous.services.map((service) => service.id === result.service.id ? result.service : service) }));
           setNotice(`تم تعديل الخدمة «${result.service.title}».`);
         }
@@ -386,7 +418,22 @@ export function AdminConsole() {
 function EditorDialog({ editor, categoryForm, serviceForm, categories, existingService, saving, mediaStatus, imageUploading, onUploadImage, onRemoveImage, onClose, onSave, onCategoryChange, onServiceChange }: { editor: Exclude<Editor, null>; categoryForm: CategoryForm; serviceForm: ServiceForm; categories: Category[]; existingService?: Service; saving: boolean; mediaStatus: MediaStatus | null; imageUploading: boolean; onUploadImage: (file: File) => Promise<void>; onRemoveImage: () => void; onClose: () => void; onSave: () => void; onCategoryChange: React.Dispatch<React.SetStateAction<CategoryForm>>; onServiceChange: React.Dispatch<React.SetStateAction<ServiceForm>> }) {
   const isCategory = editor.kind === "category";
   const title = `${editor.mode === "create" ? "إضافة" : "تعديل"} ${isCategory ? "تصنيف" : "خدمة"}`;
-  return <div className="dialog-backdrop"><div className="confirm-dialog editor-dialog"><p className="eyebrow">إدارة الكتالوج</p><h2>{title}</h2>{isCategory ? <div className="editor-grid"><FormField label="اسم التصنيف"><input value={categoryForm.name} onChange={(event) => onCategoryChange((previous) => ({ ...previous, name: event.target.value }))} placeholder="مثل خدمات Server"/></FormField><FormField label="الأيقونة أو الرابط"><input value={categoryForm.icon} onChange={(event) => onCategoryChange((previous) => ({ ...previous, icon: event.target.value }))} placeholder="Folder أو رابط أيقونة"/></FormField><FormField label="اللون"><input type="color" value={categoryForm.color} onChange={(event) => onCategoryChange((previous) => ({ ...previous, color: event.target.value }))}/></FormField><FormField label="الترتيب"><input type="number" min="0" value={categoryForm.order} onChange={(event) => onCategoryChange((previous) => ({ ...previous, order: event.target.value }))}/></FormField><FormField label="الوصف" wide><textarea value={categoryForm.description} onChange={(event) => onCategoryChange((previous) => ({ ...previous, description: event.target.value }))} placeholder="وصف قصير يظهر للعملاء"/></FormField><Toggle checked={categoryForm.isActive} onChange={(isActive) => onCategoryChange((previous) => ({ ...previous, isActive }))} label="تصنيف نشط"/></div> : <div className="editor-grid"><FormField label="اسم الخدمة" wide><input value={serviceForm.title} onChange={(event) => onServiceChange((previous) => ({ ...previous, title: event.target.value }))} placeholder="مثل TSL Tool Activation"/></FormField><FormField label="رابط الخدمة"><input dir="ltr" value={serviceForm.slug} onChange={(event) => onServiceChange((previous) => ({ ...previous, slug: event.target.value.toLowerCase().replace(/\s+/g, "-") }))} placeholder="tsl-tool-activation"/></FormField><FormField label="التصنيف"><select value={serviceForm.categoryId} onChange={(event) => onServiceChange((previous) => ({ ...previous, categoryId: event.target.value }))}><option value="">اختر التصنيف</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></FormField><FormField label="السعر (د.م.)"><input type="number" min="0" step="0.01" value={serviceForm.priceMad} onChange={(event) => onServiceChange((previous) => ({ ...previous, priceMad: event.target.value }))} placeholder="0"/></FormField><FormField label="التسليم"><input value={serviceForm.delivery} onChange={(event) => onServiceChange((previous) => ({ ...previous, delivery: event.target.value }))} placeholder="مثال: فوري بعد المعالجة"/></FormField><FormField label="شارة اختيارية"><input value={serviceForm.badge} onChange={(event) => onServiceChange((previous) => ({ ...previous, badge: event.target.value }))} placeholder="مثل الأكثر طلبًا"/></FormField>{mediaStatus?.configured ? <MediaImageControl imageUrl={serviceForm.imageUrl || undefined} alt={`صورة ${serviceForm.title || "الخدمة"}`} fallbackLabel={serviceForm.title || "خد"} kind="service" disabled={saving} uploading={imageUploading} onSelect={(file) => { void onUploadImage(file); }} onRemove={onRemoveImage}/> : <p className="editor-hint">رفع الصور غير متاح حاليًا.</p>}<FormField label="الوصف" wide><textarea value={serviceForm.description} onChange={(event) => onServiceChange((previous) => ({ ...previous, description: event.target.value }))} placeholder="وصف واضح للخدمة"/></FormField><Toggle checked={serviceForm.isActive} onChange={(isActive) => onServiceChange((previous) => ({ ...previous, isActive }))} label="إتاحة الخدمة للعملاء"/>{existingService && <p className="editor-hint">سيُحافظ الحفظ على {existingService.fields.length} حقل ديناميكي مرتبط بالخدمة.</p>}</div>}<div><button className="filter-button" onClick={onClose} disabled={saving}>إلغاء</button><button className="primary-button" onClick={onSave} disabled={saving || (!isCategory && categories.length === 0)}>{saving ? "جارٍ الحفظ..." : "حفظ التغييرات"}</button></div></div></div>;
+  return <div className="dialog-backdrop"><div className="confirm-dialog editor-dialog"><p className="eyebrow">إدارة الكتالوج</p><h2>{title}</h2>{isCategory ? <div className="editor-grid"><FormField label="اسم التصنيف"><input value={categoryForm.name} onChange={(event) => onCategoryChange((previous) => ({ ...previous, name: event.target.value }))} placeholder="مثل خدمات Server"/></FormField><FormField label="الأيقونة أو الرابط"><input value={categoryForm.icon} onChange={(event) => onCategoryChange((previous) => ({ ...previous, icon: event.target.value }))} placeholder="Folder أو رابط أيقونة"/></FormField><FormField label="اللون"><input type="color" value={categoryForm.color} onChange={(event) => onCategoryChange((previous) => ({ ...previous, color: event.target.value }))}/></FormField><FormField label="الترتيب"><input type="number" min="0" value={categoryForm.order} onChange={(event) => onCategoryChange((previous) => ({ ...previous, order: event.target.value }))}/></FormField><FormField label="الوصف" wide><textarea value={categoryForm.description} onChange={(event) => onCategoryChange((previous) => ({ ...previous, description: event.target.value }))} placeholder="وصف قصير يظهر للعملاء"/></FormField><Toggle checked={categoryForm.isActive} onChange={(isActive) => onCategoryChange((previous) => ({ ...previous, isActive }))} label="تصنيف نشط"/></div> : <div className="editor-grid"><FormField label="اسم الخدمة" wide><input value={serviceForm.title} onChange={(event) => onServiceChange((previous) => ({ ...previous, title: event.target.value }))} placeholder="مثل TSL Tool Activation"/></FormField><FormField label="رابط الخدمة"><input dir="ltr" value={serviceForm.slug} onChange={(event) => onServiceChange((previous) => ({ ...previous, slug: event.target.value.toLowerCase().replace(/\s+/g, "-") }))} placeholder="tsl-tool-activation"/></FormField><FormField label="التصنيف"><select value={serviceForm.categoryId} onChange={(event) => onServiceChange((previous) => ({ ...previous, categoryId: event.target.value }))}><option value="">اختر التصنيف</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></FormField><FormField label="السعر (د.م.)"><input type="number" min="0" step="0.01" value={serviceForm.priceMad} onChange={(event) => onServiceChange((previous) => ({ ...previous, priceMad: event.target.value }))} placeholder="0"/></FormField><FormField label="التسليم"><input value={serviceForm.delivery} onChange={(event) => onServiceChange((previous) => ({ ...previous, delivery: event.target.value }))} placeholder="مثال: فوري بعد المعالجة"/></FormField><FormField label="شارة اختيارية"><input value={serviceForm.badge} onChange={(event) => onServiceChange((previous) => ({ ...previous, badge: event.target.value }))} placeholder="مثل الأكثر طلبًا"/></FormField>{mediaStatus?.configured ? <MediaImageControl imageUrl={serviceForm.imageUrl || undefined} alt={`صورة ${serviceForm.title || "الخدمة"}`} fallbackLabel={serviceForm.title || "خد"} kind="service" disabled={saving} uploading={imageUploading} onSelect={(file) => { void onUploadImage(file); }} onRemove={onRemoveImage}/> : <p className="editor-hint">رفع الصور غير متاح حاليًا.</p>}<FormField label="الوصف" wide><textarea value={serviceForm.description} onChange={(event) => onServiceChange((previous) => ({ ...previous, description: event.target.value }))} placeholder="وصف واضح للخدمة"/></FormField><Toggle checked={serviceForm.isActive} onChange={(isActive) => onServiceChange((previous) => ({ ...previous, isActive }))} label="إتاحة الخدمة للعملاء"/><DynamicFieldsEditor fields={serviceForm.fields} onChange={(fields) => onServiceChange((previous) => ({ ...previous, fields }))} disabled={saving}/>{existingService && <p className="editor-hint">تم تحميل {existingService.fields.length} حقل مرتبط بالخدمة. عدّله ثم احفظ لتحديث نموذج الطلب.</p>}</div>}<div><button className="filter-button" onClick={onClose} disabled={saving}>إلغاء</button><button className="primary-button" onClick={onSave} disabled={saving || (!isCategory && categories.length === 0)}>{saving ? "جارٍ الحفظ..." : "حفظ التغييرات"}</button></div></div></div>;
+}
+
+function DynamicFieldsEditor({ fields, onChange, disabled }: { fields: DynamicField[]; onChange: (fields: DynamicField[]) => void; disabled: boolean }) {
+  function addField() {
+    const existing = new Set(fields.map((field) => field.id.toLowerCase()));
+    let number = fields.length + 1;
+    while (existing.has(`field-${number}`)) number += 1;
+    onChange([...fields, { id: `field-${number}`, label: "", type: "text", required: true, placeholder: "" }]);
+  }
+
+  function updateField(index: number, update: (field: DynamicField) => DynamicField) {
+    onChange(fields.map((field, fieldIndex) => fieldIndex === index ? update(field) : field));
+  }
+
+  return <section className="dynamic-fields-editor"><div className="dynamic-fields-header"><div><span className="eyebrow">نموذج الطلب</span><h3>الحقول المطلوبة من العميل</h3><p>أضف فقط البيانات اللازمة لتنفيذ هذه الخدمة. يراجع الخادم كل حقل قبل الحفظ والطلب.</p></div><button className="filter-button" type="button" onClick={addField} disabled={disabled || fields.length >= 20}><Plus size={14}/> إضافة حقل</button></div>{fields.length === 0 ? <div className="dynamic-fields-empty"><b>لا توجد حقول مخصصة بعد.</b><span>سيطلب المتجر البريد الإلكتروني افتراضيًا إلى أن تضيف حقولًا خاصة بهذه الخدمة.</span></div> : <div className="dynamic-fields-list">{fields.map((field, index) => <article className="dynamic-field-card" key={`${field.id}-${index}`}><div className="dynamic-field-title"><b>حقل {index + 1}</b><button className="danger-button" type="button" onClick={() => onChange(fields.filter((_, fieldIndex) => fieldIndex !== index))} disabled={disabled}><Trash2 size={14}/> إزالة</button></div><div className="dynamic-field-grid"><label><span>المعرف الداخلي</span><input dir="ltr" value={field.id} onChange={(event) => updateField(index, (current) => ({ ...current, id: event.target.value }))} placeholder="username" disabled={disabled}/></label><label><span>اسم الحقل للعميل</span><input value={field.label} onChange={(event) => updateField(index, (current) => ({ ...current, label: event.target.value }))} placeholder="مثل اسم مستخدم UnlockTool.net" disabled={disabled}/></label><label><span>نوع الإدخال</span><select value={field.type} onChange={(event) => { const type = event.target.value as DynamicField["type"]; updateField(index, (current) => ({ ...current, type, ...(type === "select" ? { options: current.options?.length ? current.options : [""] } : { options: undefined }) })); }} disabled={disabled}>{dynamicFieldTypes.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}</select></label><label><span>نص مساعد</span><input value={field.placeholder || ""} onChange={(event) => updateField(index, (current) => ({ ...current, placeholder: event.target.value }))} placeholder="مثال أو توضيح قصير" disabled={disabled}/></label><Toggle checked={field.required} onChange={(required) => updateField(index, (current) => ({ ...current, required }))} label="حقل مطلوب"/>{field.type === "select" && <label className="dynamic-options"><span>خيارات القائمة</span><textarea value={(field.options || []).join("\n")} onChange={(event) => updateField(index, (current) => ({ ...current, options: event.target.value.split("\n") }))} placeholder={"تفعيل جديد\nتجديد"} disabled={disabled}/><small>اكتب كل خيار في سطر مستقل.</small></label>}</div></article>)}</div>}</section>;
 }
 
 function FormField({ label, wide, children }: { label: string; wide?: boolean; children: ReactNode }) { return <label className={`editor-field${wide ? " wide" : ""}`}><span>{label}</span>{children}</label>; }
