@@ -14,6 +14,29 @@ class OrderRouteError extends Error {
   constructor(readonly status: number, message: string) { super(message); }
 }
 
+const defaultEmailField: DynamicField = {
+  id: "email",
+  label: "البريد الإلكتروني لاستلام التفعيل",
+  type: "email",
+  required: true,
+  placeholder: "name@example.com",
+};
+
+function normalizeRequestFields(fields: unknown): DynamicField[] {
+  const supportedTypes = new Set<DynamicField["type"]>(["text", "email", "select", "textarea"]);
+  const usedIds = new Set<string>();
+  const normalized = Array.isArray(fields) ? fields.flatMap((candidate) => {
+    if (!candidate || typeof candidate !== "object") return [];
+    const field = candidate as Record<string, unknown>;
+    if (typeof field.id !== "string" || !field.id.trim() || usedIds.has(field.id) || typeof field.label !== "string" || !field.label.trim() || typeof field.required !== "boolean" || typeof field.type !== "string" || !supportedTypes.has(field.type as DynamicField["type"])) return [];
+    const options = Array.isArray(field.options) && field.options.every((option) => typeof option === "string" && option.trim()) ? field.options : undefined;
+    if (field.type === "select" && (!options || options.length === 0)) return [];
+    usedIds.add(field.id);
+    return [{ id: field.id, label: field.label, type: field.type as DynamicField["type"], required: field.required, placeholder: typeof field.placeholder === "string" ? field.placeholder : undefined, options }];
+  }) : [];
+  return normalized.length ? normalized : [defaultEmailField];
+}
+
 function validateFormData(input: Record<string, string>, fields: DynamicField[]) {
   const knownFields = new Set(fields.map((field) => field.id));
   const unknownFields = Object.keys(input).filter((key) => !knownFields.has(key));
@@ -51,7 +74,7 @@ export async function POST(request: NextRequest) {
 
     const service = serviceSnapshot.data() as { priceMad?: unknown; fields?: unknown; title?: unknown };
     if (typeof service.priceMad !== "number" || service.priceMad < 0 || !Array.isArray(service.fields)) return NextResponse.json({ error: "بيانات الخدمة غير صحيحة" }, { status: 409 });
-    const formData = validateFormData(parsed.data.formData, service.fields as DynamicField[]);
+    const formData = validateFormData(parsed.data.formData, normalizeRequestFields(service.fields));
 
     const now = new Date().toISOString();
     const orderReference = db.collection("orders").doc();

@@ -3,10 +3,32 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, Send } from "lucide-react";
-import type { Service } from "@/lib/types";
+import type { DynamicField, Service } from "@/lib/types";
 import { firebaseServices } from "@/lib/firebase/client";
 
+const defaultEmailField: DynamicField = {
+  id: "email",
+  label: "البريد الإلكتروني لاستلام التفعيل",
+  type: "email",
+  required: true,
+  placeholder: "name@example.com",
+};
+
+function requestFields(fields: unknown): DynamicField[] {
+  const supportedTypes = new Set<DynamicField["type"]>(["text", "email", "select", "textarea"]);
+  const normalized = Array.isArray(fields) ? fields.flatMap((candidate) => {
+    if (!candidate || typeof candidate !== "object") return [];
+    const field = candidate as Record<string, unknown>;
+    if (typeof field.id !== "string" || !field.id.trim() || typeof field.label !== "string" || !field.label.trim() || typeof field.required !== "boolean" || typeof field.type !== "string" || !supportedTypes.has(field.type as DynamicField["type"])) return [];
+    const options = Array.isArray(field.options) && field.options.every((option) => typeof option === "string") ? field.options : undefined;
+    if (field.type === "select" && (!options || options.length === 0)) return [];
+    return [{ id: field.id, label: field.label, type: field.type as DynamicField["type"], required: field.required, placeholder: typeof field.placeholder === "string" ? field.placeholder : undefined, options }];
+  }) : [];
+  return normalized.length ? normalized : [defaultEmailField];
+}
+
 export function RequestForm({ service }: { service: Service }) {
+  const fields = requestFields(service.fields);
   const router = useRouter();
   const [submitted, setSubmitted] = useState(false);
   const [orderId, setOrderId] = useState<string | null>(null);
@@ -43,7 +65,7 @@ export function RequestForm({ service }: { service: Service }) {
   }
 
   return <form className="request-form" onSubmit={submit}>
-    {service.fields.map((field) => (
+    {fields.map((field) => (
       <label key={field.id} className="form-field"><span>{field.label}{field.required && <b> *</b>}</span>
         {field.type === "select" ? <select name={field.id} required={field.required} defaultValue=""><option value="" disabled>اختر من القائمة</option>{field.options?.map((option) => <option key={option}>{option}</option>)}</select> : field.type === "textarea" ? <textarea name={field.id} required={field.required} placeholder={field.placeholder} /> : <input name={field.id} type={field.type} required={field.required} placeholder={field.placeholder} />}
       </label>
