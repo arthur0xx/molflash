@@ -4,6 +4,7 @@ import { BottomNav, Header } from "@/components/header";
 import { ServiceCard } from "@/components/service-card";
 import { getStorefrontSnapshot } from "@/lib/repository";
 import { safeJsonLd } from "@/lib/seo";
+import { WhatsAppSupportLink } from "@/components/whatsapp-support-link";
 
 function serviceCountLabel(count: number) {
   return count === 1 ? "خدمة واحدة" : `${count} خدمات`;
@@ -63,7 +64,7 @@ export default async function Home() {
     <section className="support-card">
       <div className="support-icon"><MessageCircle size={23} /></div>
       <div><h3>تحتاج مساعدة قبل الطلب؟</h3><p>أرسل رسالتك من الحساب، وستتابع حالة الطلب والتسليم من المكان نفسه.</p></div>
-      <Link href="/account" className="support-link"><CircleHelp size={18} /> الدعم</Link>
+      <div className="support-actions"><WhatsAppSupportLink label="واتساب" /><Link href="/account" className="support-link"><CircleHelp size={18} /> الدعم</Link></div>
     </section>
   </main><BottomNav /></>;
 }
