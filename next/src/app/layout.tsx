@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { SiteFooter } from "@/components/site-footer";
 import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
@@ -7,6 +7,13 @@ import { AppLoadingSplash } from "@/components/app-loading-splash";
 const siteUrl = new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://temporary-speedy-jade-mdelya8.vercel.app");
 const title = "ChriGsm | خدمات GSM الرقمية";
 const description = "ChriGsm متجر مغربي لشراء خدمات GSM الرقمية: التفعيل، الأدوات، وخدمات الأجهزة مع متابعة واضحة للطلبات.";
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#0b2c5d",
+};
 
 export const metadata: Metadata = {
   metadataBase: siteUrl,

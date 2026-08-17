@@ -38,6 +38,8 @@ const serviceSchema = z.object({
   const ids = service.fields.map((field) => field.id);
   if (new Set(ids).size !== ids.length) context.addIssue({ code: "custom", message: "معرفات الحقول يجب أن تكون فريدة" });
   if (Boolean(service.imageUrl) !== Boolean(service.imagePublicId)) context.addIssue({ code: "custom", message: "الصورة المرفوعة تحتاج رابطًا ومعرفًا صالحين من Cloudinary" });
+  if (service.isActive && service.priceMad < 1) context.addIssue({ code: "custom", path: ["priceMad"], message: "حدد سعر البيع قبل تفعيل الخدمة للعملاء" });
+  if (service.priceMad < 1 && service.compareAtPriceMad !== undefined) context.addIssue({ code: "custom", path: ["compareAtPriceMad"], message: "لا يمكن ضبط سعر أصلي لمسودة بلا سعر بيع" });
   if (service.compareAtPriceMad !== undefined && service.compareAtPriceMad <= service.priceMad) context.addIssue({ code: "custom", path: ["compareAtPriceMad"], message: "السعر الأصلي يجب أن يكون أعلى من سعر البيع لتفعيل العرض" });
 });
 

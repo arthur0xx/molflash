@@ -90,7 +90,10 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
     const nextPriceMad = parsed.data.priceMad ?? (typeof current.priceMad === "number" ? current.priceMad : Number(current.priceMad));
     const nextCompareAtPriceMad = parsed.data.compareAtPriceMad === undefined ? current.compareAtPriceMad : parsed.data.compareAtPriceMad;
+    const nextIsActive = parsed.data.isActive ?? current.isActive === true;
     if (!Number.isFinite(nextPriceMad) || nextPriceMad < 0) return NextResponse.json({ error: "السعر الحالي للخدمة غير صالح" }, { status: 400 });
+    if (nextIsActive && nextPriceMad < 1) return NextResponse.json({ error: "حدد سعر البيع قبل تفعيل الخدمة للعملاء" }, { status: 400 });
+    if (nextPriceMad < 1 && nextCompareAtPriceMad !== undefined && nextCompareAtPriceMad !== null) return NextResponse.json({ error: "لا يمكن ضبط سعر أصلي لمسودة بلا سعر بيع" }, { status: 400 });
     if (nextCompareAtPriceMad !== undefined && nextCompareAtPriceMad !== null && (typeof nextCompareAtPriceMad !== "number" || !Number.isFinite(nextCompareAtPriceMad) || nextCompareAtPriceMad <= nextPriceMad)) return NextResponse.json({ error: "السعر الأصلي يجب أن يكون أعلى من سعر البيع لتفعيل العرض" }, { status: 400 });
 
     const now = new Date().toISOString();

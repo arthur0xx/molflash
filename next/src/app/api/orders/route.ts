@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
     if (!serviceSnapshot.exists || serviceSnapshot.data()?.isActive !== true) return NextResponse.json({ error: "الخدمة غير متاحة" }, { status: 404 });
 
     const service = serviceSnapshot.data() as { priceMad?: unknown; fields?: unknown; title?: unknown };
-    if (typeof service.priceMad !== "number" || service.priceMad < 0 || !Array.isArray(service.fields)) return NextResponse.json({ error: "بيانات الخدمة غير صحيحة" }, { status: 409 });
+    if (typeof service.priceMad !== "number" || service.priceMad < 1 || !Array.isArray(service.fields)) return NextResponse.json({ error: "الخدمة تحتاج سعر بيع قبل قبول الطلبات" }, { status: 409 });
     const formData = validateFormData(parsed.data.formData, normalizeRequestFields(service.fields));
 
     const now = new Date().toISOString();
