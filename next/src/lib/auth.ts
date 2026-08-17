@@ -33,6 +33,11 @@ function persist(session: AuthSession | null) {
 export function normalizedEmail(value: string) { return value.trim().toLowerCase(); }
 function validEmail(value: string) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value); }
 
+function preferGoogleRedirect() {
+  if (!browserReady() || typeof window.matchMedia !== "function") return false;
+  return window.matchMedia("(pointer: coarse)").matches;
+}
+
 async function authModules() {
   const [
     { GoogleAuthProvider, applyActionCode, confirmPasswordReset, createUserWithEmailAndPassword, deleteUser, getAdditionalUserInfo, getIdTokenResult, getRedirectResult, linkWithPopup, linkWithRedirect, onAuthStateChanged, reload, signInWithEmailAndPassword, signInWithPopup, signInWithRedirect, signOut, updateProfile, verifyPasswordResetCode },
@@ -146,17 +151,33 @@ export async function signInWithGoogle(): Promise<GoogleSignInResult> {
   const services = firebaseServices();
   if (!services) return { status: "unavailable", errorCode: "firebase-not-configured" };
 
+  const provider = new GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: "select_account" });
+
+  if (preferGoogleRedirect()) {
+    try {
+      await signInWithRedirect(services.auth, provider);
+      return { status: "redirecting" };
+    } catch (reason) {
+      const code = typeof reason === "object" && reason && "code" in reason ? String(reason.code) : "";
+      return { status: "unavailable", errorCode: code || "redirect-unavailable" };
+    }
+  }
+
   try {
-    const provider = new GoogleAuthProvider();
-    provider.setCustomParameters({ prompt: "select_account" });
     const credential = await signInWithPopup(services.auth, provider);
     return await completeGoogleCredential({ user: credential.user as FirebaseUserLike }, getAdditionalUserInfo(credential));
   } catch (reason) {
     const code = typeof reason === "object" && reason && "code" in reason ? String(reason.code) : "";
     if (code === "auth/account-exists-with-different-credential") return { status: "existing-account", errorCode: code };
-    if (["auth/popup-blocked", "auth/popup-closed-by-user", "auth/cancelled-popup-request", "auth/operation-not-supported-in-this-environment"].includes(code)) {
-      await signInWithRedirect(services.auth, new GoogleAuthProvider());
-      return { status: "redirecting", errorCode: code };
+    if (["auth/popup-blocked", "auth/operation-not-supported-in-this-environment"].includes(code)) {
+      try {
+        await signInWithRedirect(services.auth, provider);
+        return { status: "redirecting", errorCode: code };
+      } catch (redirectReason) {
+        const redirectCode = typeof redirectReason === "object" && redirectReason && "code" in redirectReason ? String(redirectReason.code) : "";
+        return { status: "unavailable", errorCode: redirectCode || code };
+      }
     }
     return { status: "unavailable", errorCode: code || "unknown" };
   }

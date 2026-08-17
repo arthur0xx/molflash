@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, Send } from "lucide-react";
+import { onAuthStateChanged } from "firebase/auth";
+import { CheckCircle2, LogIn, Send } from "lucide-react";
 import type { DynamicField, Service } from "@/lib/types";
 import { firebaseServices } from "@/lib/firebase/client";
+import { clearRequestDraft, loadRequestDraft, saveRequestDraft } from "@/lib/request-draft";
 
 const defaultEmailField: DynamicField = {
   id: "email",
@@ -34,13 +36,36 @@ export function RequestForm({ service }: { service: Service }) {
   const [orderId, setOrderId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [restoredDraft, setRestoredDraft] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const restoreDraft = window.setTimeout(() => {
+      const draft = loadRequestDraft(service.id, service.slug);
+      if (cancelled || !draft) return;
+      setAnswers(draft.formData);
+      setRestoredDraft(true);
+    }, 0);
+    return () => { cancelled = true; window.clearTimeout(restoreDraft); };
+  }, [service.id, service.slug]);
+
+  useEffect(() => {
+    const services = firebaseServices();
+    if (!services) return;
+    return onAuthStateChanged(services.auth, (user) => setIsAuthenticated(Boolean(user)));
+  }, []);
+
+  function updateAnswer(fieldId: string, value: string) {
+    setAnswers((current) => ({ ...current, [fieldId]: value }));
+    setRestoredDraft(false);
+  }
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const formElement = event.currentTarget;
-    setSubmitting(true); setError("");
-    const form = new FormData(formElement);
-    const answers = Object.fromEntries(form.entries().map(([key, value]) => [key, String(value)]));
+    setSubmitting(true);
+    setError("");
     const services = firebaseServices();
 
     if (!services) {
@@ -52,25 +77,36 @@ export function RequestForm({ service }: { service: Service }) {
     try {
       const user = services.auth.currentUser;
       if (!user) {
+        saveRequestDraft({ serviceId: service.id, serviceSlug: service.slug, formData: answers, createdAt: Date.now() });
         router.push(`/login?next=${encodeURIComponent(`/service/${service.slug}`)}`);
         return;
       }
       const response = await fetch("/api/orders", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${await user.getIdToken()}` }, body: JSON.stringify({ serviceId: service.id, formData: answers }) });
       const payload = await response.json().catch(() => ({})) as { id?: string; error?: string };
       if (!response.ok || !payload.id) throw new Error(payload.error || "تعذر إنشاء الطلب.");
-      setOrderId(payload.id); setSubmitted(true); formElement.reset();
+      clearRequestDraft(service.id);
+      setAnswers({});
+      setOrderId(payload.id);
+      setSubmitted(true);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "تعذر إنشاء الطلب.");
-    } finally { setSubmitting(false); }
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return <form className="request-form" onSubmit={submit}>
+    {restoredDraft && <p className="success-note request-draft-note" role="status"><CheckCircle2 size={17}/> أعدنا البيانات التي أدخلتها قبل تسجيل الدخول.</p>}
     {fields.map((field) => (
       <label key={field.id} className="form-field"><span>{field.label}{field.required && <b> *</b>}</span>
-        {field.type === "select" ? <select name={field.id} required={field.required} defaultValue=""><option value="" disabled>اختر من القائمة</option>{field.options?.map((option) => <option key={option}>{option}</option>)}</select> : field.type === "textarea" ? <textarea name={field.id} required={field.required} placeholder={field.placeholder} /> : <input name={field.id} type={field.type} required={field.required} placeholder={field.placeholder} />}
+        {field.type === "select"
+          ? <select name={field.id} required={field.required} value={answers[field.id] || ""} onChange={(event) => updateAnswer(field.id, event.target.value)}><option value="" disabled>اختر من القائمة</option>{field.options?.map((option) => <option key={option}>{option}</option>)}</select>
+          : field.type === "textarea"
+            ? <textarea name={field.id} required={field.required} placeholder={field.placeholder} value={answers[field.id] || ""} onChange={(event) => updateAnswer(field.id, event.target.value)} />
+            : <input name={field.id} type={field.type} required={field.required} placeholder={field.placeholder} value={answers[field.id] || ""} onChange={(event) => updateAnswer(field.id, event.target.value)} />}
       </label>
     ))}
     {error && <p className="form-error" role="alert">{error}</p>}
-    {submitted ? <div className="success-note"><CheckCircle2 size={18}/><div><b>تم إنشاء طلبك بنجاح.</b><span>رقم الطلب: {orderId} — افتح «حسابي» لمتابعته.</span></div></div> : <button className="primary-button" type="submit" disabled={submitting}><Send size={17}/>{submitting ? "جارٍ إنشاء الطلب..." : "إنشاء الطلب"}</button>}
+    {submitted ? <div className="success-note"><CheckCircle2 size={18}/><div><b>تم إنشاء طلبك بنجاح.</b><span>رقم الطلب: {orderId} — افتح «حسابي» لمتابعته.</span></div></div> : <><button className="primary-button" type="submit" disabled={submitting}>{isAuthenticated ? <Send size={17}/> : <LogIn size={17}/>}{submitting ? "جارٍ إنشاء الطلب..." : isAuthenticated ? "إنشاء الطلب" : "سجّل الدخول لإرسال الطلب"}</button>{!isAuthenticated && <p className="muted-text request-login-note">سنحفظ ما أدخلته في هذا التبويب لمدة ساعة، ثم نعيده إليك بعد تسجيل الدخول.</p>}</>}
   </form>;
 }

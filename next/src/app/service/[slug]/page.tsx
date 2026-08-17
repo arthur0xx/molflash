@@ -43,7 +43,7 @@ export default async function ServicePage({ params }: ServicePageProps) {
   const service = snapshot.services.find((item) => item.slug === slug);
   if (!service) notFound();
   const category = snapshot.categories.find((item) => item.id === service.categoryId);
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://temporary-speedy-jade-mdelya8.vercel.app";
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://chrigsm-next-arthurs-projects-713d8d1f.vercel.app";
   const structuredData = {
     "@context": "https://schema.org",
     "@type": "Service",

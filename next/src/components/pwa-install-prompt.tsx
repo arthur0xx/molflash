@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { Download, Share2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -16,13 +17,25 @@ function isAppleMobile() {
   return /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 }
 
+function isSensitiveRoute(pathname: string) {
+  return pathname === "/login"
+    || pathname === "/admin"
+    || pathname.startsWith("/service/")
+    || pathname.startsWith("/verify-email")
+    || pathname.startsWith("/phone-verification")
+    || pathname.startsWith("/auth/");
+}
+
 export function PwaInstallPrompt() {
+  const pathname = usePathname();
+  const suppressPrompt = isSensitiveRoute(pathname);
   const [installEvent, setInstallEvent] = useState<InstallPromptEvent | null>(null);
   const [visible, setVisible] = useState(false);
   const [appleMobile, setAppleMobile] = useState(false);
 
   useEffect(() => {
-    if (isStandalone()) return;
+    if (suppressPrompt || isStandalone()) return;
+
     const apple = isAppleMobile();
     const dismissed = window.sessionStorage.getItem("chrigsm-pwa-prompt-dismissed") === "1";
     const initialization = window.setTimeout(() => {
@@ -47,7 +60,7 @@ export function PwaInstallPrompt() {
       window.removeEventListener("beforeinstallprompt", onBeforeInstallPrompt);
       window.removeEventListener("appinstalled", onInstalled);
     };
-  }, []);
+  }, [suppressPrompt]);
 
   function dismiss() {
     window.sessionStorage.setItem("chrigsm-pwa-prompt-dismissed", "1");
@@ -62,7 +75,7 @@ export function PwaInstallPrompt() {
     setInstallEvent(null);
   }
 
-  if (!visible && !appleMobile) return null;
+  if (suppressPrompt || (!visible && !appleMobile)) return null;
 
   return <aside className="pwa-install-prompt" aria-label="تثبيت ChriGsm كتطبيق">
     <button className="pwa-dismiss" type="button" aria-label="إغلاق رسالة التثبيت" onClick={dismiss}><X size={16} /></button>

@@ -54,7 +54,7 @@ export function LoginForm() {
       if (cancelled || !result) return;
       if (result.status !== "signed-in") {
         const message = result.status === "existing-account"
-          ? "هذا البريد مرتبط بحساب ChriGsm بالبريد وكلمة المرور. سجّل الدخول بهذه الطريقة أولًا."
+          ? "هذا البريد مرتبط بحساب ChriGsm بالبريد وكلمة المرور. سجّل الدخول بالبريد أولًا، ثم اربط Google من إعدادات الحساب."
           : result.errorCode === "auth/unauthorized-domain"
             ? "نطاق الموقع غير مضاف في Firebase Authorized Domains."
             : result.errorCode?.startsWith("register-")
@@ -105,7 +105,7 @@ export function LoginForm() {
     setSubmittingGoogle(false);
     if (result.status === "redirecting") return;
     if (result.status === "existing-account") {
-      setError("هذا البريد مرتبط بطريقة دخول أخرى. سجّل الدخول بالبريد وكلمة المرور أولًا.");
+      setError("هذا البريد مرتبط بطريقة دخول أخرى. سجّل الدخول بالبريد وكلمة المرور أولًا، ثم اربط Google من إعدادات الحساب.");
       return;
     }
     if (result.status !== "signed-in") {

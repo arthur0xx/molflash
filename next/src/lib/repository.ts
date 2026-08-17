@@ -20,8 +20,13 @@ export async function getStorefrontSnapshot(): Promise<StorefrontSnapshot> {
   ]);
 
   const publicCategories = categories.docs.map((document) => ({ id: document.id, ...document.data() })) as StorefrontSnapshot["categories"];
-  const publicServices = services.docs.map((document) => ({ id: document.id, ...document.data() })) as StorefrontSnapshot["services"];
-  return { categories: publicCategories.filter((category) => category.isActive), services: publicServices.filter((service) => service.isActive) };
+  const activeServices = services.docs.map((document) => ({ id: document.id, ...document.data() })) as StorefrontSnapshot["services"];
+  const visibleServices = activeServices.filter((service) => service.isActive);
+  const visibleCategoryIds = new Set(visibleServices.map((service) => service.categoryId));
+  return {
+    categories: publicCategories.filter((category) => category.isActive && visibleCategoryIds.has(category.id)),
+    services: visibleServices,
+  };
 }
 
 /** Reads the full operational snapshot for an owner-only, already authorized server request. */
