@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { FieldValue } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebase/admin";
 import { requireAdmin } from "@/lib/api/admin-auth";
 import { deleteCloudinaryImage } from "@/lib/cloudinary";
@@ -31,6 +32,8 @@ const updateServiceSchema = z.object({
   categoryId: z.string().trim().min(1, "اختر تصنيفًا صالحًا").max(128).optional(),
   description: z.string().trim().min(4, "وصف الخدمة قصير جدًا").max(2000, "وصف الخدمة طويل جدًا").optional(),
   priceMad: z.number().finite().min(0, "السعر لا يمكن أن يكون سالبًا").max(1000000, "السعر أكبر من الحد المسموح").optional(),
+  compareAtPriceMad: z.number().finite().min(0, "السعر الأصلي لا يمكن أن يكون سالبًا").max(1000000, "السعر الأصلي أكبر من الحد المسموح").nullable().optional(),
+  promoteInCatalog: z.boolean().optional(),
   delivery: z.string().trim().min(2, "مدة أو نوع التسليم مطلوب").max(200, "معلومة التسليم طويلة جدًا").optional(),
   badge: z.string().trim().max(80, "الشارة طويلة جدًا").nullable().optional(),
   imageUrl: serviceImageUrl.nullable().optional(),
@@ -85,8 +88,14 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       if (!duplicate.empty) return NextResponse.json({ error: "رابط الخدمة مستخدم بالفعل" }, { status: 409 });
     }
 
+    const nextPriceMad = parsed.data.priceMad ?? (typeof current.priceMad === "number" ? current.priceMad : Number(current.priceMad));
+    const nextCompareAtPriceMad = parsed.data.compareAtPriceMad === undefined ? current.compareAtPriceMad : parsed.data.compareAtPriceMad;
+    if (!Number.isFinite(nextPriceMad) || nextPriceMad < 0) return NextResponse.json({ error: "السعر الحالي للخدمة غير صالح" }, { status: 400 });
+    if (nextCompareAtPriceMad !== undefined && nextCompareAtPriceMad !== null && (typeof nextCompareAtPriceMad !== "number" || !Number.isFinite(nextCompareAtPriceMad) || nextCompareAtPriceMad <= nextPriceMad)) return NextResponse.json({ error: "السعر الأصلي يجب أن يكون أعلى من سعر البيع لتفعيل العرض" }, { status: 400 });
+
     const now = new Date().toISOString();
     const update: Record<string, unknown> = { ...parsed.data, updatedAt: now, updatedBy: admin.uid };
+    if (parsed.data.compareAtPriceMad === null) update.compareAtPriceMad = FieldValue.delete();
     if (parsed.data.badge === null) update.badge = "";
     if (parsed.data.imageUrl === null) update.imageUrl = "";
     if (parsed.data.imagePublicId === null) update.imagePublicId = "";
@@ -97,7 +106,9 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     const nextPublicId = typeof update.imagePublicId === "string" ? update.imagePublicId : previousPublicId;
     if (previousPublicId && previousPublicId !== nextPublicId) cleanupServiceAsset(previousPublicId);
 
-    return NextResponse.json({ service: { id: serviceId, ...current, ...update } });
+    const responseService = { id: serviceId, ...current, ...update } as Record<string, unknown>;
+    if (parsed.data.compareAtPriceMad === null) delete responseService.compareAtPriceMad;
+    return NextResponse.json({ service: responseService });
   } catch (error) {
     console.error("Failed to update service", error);
     return NextResponse.json({ error: "تعذر تعديل الخدمة" }, { status: 500 });

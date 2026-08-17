@@ -16,12 +16,18 @@ export async function getStorefrontSnapshot(): Promise<StorefrontSnapshot> {
 
   const [categories, services] = await Promise.all([
     db.collection("categories").orderBy("order").get(),
-    db.collection("services").orderBy("title").get(),
+    db.collection("services").get(),
   ]);
 
   const publicCategories = categories.docs.map((document) => ({ id: document.id, ...document.data() })) as StorefrontSnapshot["categories"];
   const activeServices = services.docs.map((document) => ({ id: document.id, ...document.data() })) as StorefrontSnapshot["services"];
-  const visibleServices = activeServices.filter((service) => service.isActive);
+  const visibleServices = activeServices.filter((service) => service.isActive).sort((left, right) => {
+    const promotedDifference = Number(right.promoteInCatalog === true) - Number(left.promoteInCatalog === true);
+    if (promotedDifference) return promotedDifference;
+    const updatedDifference = String(right.updatedAt || "").localeCompare(String(left.updatedAt || ""));
+    if (updatedDifference) return updatedDifference;
+    return String(left.title || "").localeCompare(String(right.title || ""), "ar");
+  });
   const visibleCategoryIds = new Set(visibleServices.map((service) => service.categoryId));
   return {
     categories: publicCategories.filter((category) => category.isActive && visibleCategoryIds.has(category.id)),

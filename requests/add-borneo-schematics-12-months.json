@@ -1,0 +1,32 @@
+{
+  "parent": "projects/chrigsm-4f883/databases/(default)/documents",
+  "collectionId": "services",
+  "documentId": "borneo-schematics-12-months",
+  "document": {
+    "fields": {
+      "id": {"stringValue": "borneo-schematics-12-months"},
+      "slug": {"stringValue": "borneo-schematics-12-months"},
+      "title": {"stringValue": "Borneo Schematics — تفعيل سنة / مستخدم واحد"},
+      "categoryId": {"stringValue": "mxCFyRPpYkx5adrgwe0c"},
+      "catalogFamily": {"stringValue": "tool"},
+      "visualPreset": {"stringValue": "borneo-schematics"},
+      "description": {"stringValue": "تفعيل Borneo Schematics الرقمي لمدة سنة لمستخدم واحد وعلى حاسوب واحد، لأدوات المخططات وحلول صيانة لوحات الهواتف."},
+      "priceMad": {"integerValue": "417"},
+      "delivery": {"stringValue": "حسب التوفر"},
+      "badge": {"stringValue": "سنة / مستخدم واحد"},
+      "termValue": {"integerValue": "1"},
+      "termUnit": {"stringValue": "years"},
+      "imageUrl": {"stringValue": "https://res.cloudinary.com/tkkrn30h/image/upload/v1786996337/chrigsm/catalog/borneo-schematics-12-months.jpg"},
+      "imagePublicId": {"stringValue": "chrigsm/catalog/borneo-schematics-12-months"},
+      "isActive": {"booleanValue": true},
+      "publicationStatus": {"stringValue": "published"},
+      "promoteInCatalog": {"booleanValue": false},
+      "fields": {"arrayValue": {"values": [
+        {"mapValue": {"fields": {"id": {"stringValue": "email"}, "label": {"stringValue": "البريد الإلكتروني لاستلام رمز Borneo"}, "placeholder": {"stringValue": "name@example.com"}, "required": {"booleanValue": true}, "type": {"stringValue": "email"}}}},
+        {"mapValue": {"fields": {"id": {"stringValue": "note"}, "label": {"stringValue": "ملاحظة إضافية"}, "required": {"booleanValue": false}, "type": {"stringValue": "textarea"}}}}
+      ]}},
+      "createdAt": {"stringValue": "2026-08-17T19:53:44.000Z"},
+      "updatedAt": {"stringValue": "2026-08-17T19:53:44.000Z"}
+    }
+  }
+}

@@ -27,6 +27,10 @@ export interface Service {
   categoryId: string;
   description: string;
   priceMad: number;
+  /** Optional original price shown only when it is higher than the effective sale price. */
+  compareAtPriceMad?: number;
+  /** Moves a service to the top of catalogue results when the owner enables it. */
+  promoteInCatalog?: boolean;
   delivery: string;
   badge?: string;
   imageUrl?: string;
@@ -37,6 +41,8 @@ export interface Service {
   termValue?: number;
   termUnit?: "days" | "months" | "years";
   publicationStatus?: "draft" | "ready" | "published" | "paused";
+  createdAt?: string;
+  updatedAt?: string;
   isActive: boolean;
   fields: DynamicField[];
 }

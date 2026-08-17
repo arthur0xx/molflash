@@ -26,6 +26,8 @@ const serviceSchema = z.object({
   categoryId: z.string().trim().min(1, "اختر تصنيفًا صالحًا").max(128),
   description: z.string().trim().min(4, "وصف الخدمة قصير جدًا").max(2000, "وصف الخدمة طويل جدًا"),
   priceMad: z.number().finite().min(0, "السعر لا يمكن أن يكون سالبًا").max(1000000, "السعر أكبر من الحد المسموح"),
+  compareAtPriceMad: z.number().finite().min(0, "السعر الأصلي لا يمكن أن يكون سالبًا").max(1000000, "السعر الأصلي أكبر من الحد المسموح").optional(),
+  promoteInCatalog: z.boolean().default(false),
   delivery: z.string().trim().min(2, "مدة أو نوع التسليم مطلوب").max(200, "معلومة التسليم طويلة جدًا"),
   badge: z.string().trim().max(80, "الشارة طويلة جدًا").optional(),
   imageUrl: managedImageUrl.optional(),
@@ -36,6 +38,7 @@ const serviceSchema = z.object({
   const ids = service.fields.map((field) => field.id);
   if (new Set(ids).size !== ids.length) context.addIssue({ code: "custom", message: "معرفات الحقول يجب أن تكون فريدة" });
   if (Boolean(service.imageUrl) !== Boolean(service.imagePublicId)) context.addIssue({ code: "custom", message: "الصورة المرفوعة تحتاج رابطًا ومعرفًا صالحين من Cloudinary" });
+  if (service.compareAtPriceMad !== undefined && service.compareAtPriceMad <= service.priceMad) context.addIssue({ code: "custom", path: ["compareAtPriceMad"], message: "السعر الأصلي يجب أن يكون أعلى من سعر البيع لتفعيل العرض" });
 });
 
 export async function POST(request: NextRequest) {

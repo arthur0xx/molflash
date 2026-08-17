@@ -4,6 +4,9 @@ import { ArrowLeft, Clock3 } from "lucide-react";
 import { formatMAD, type Service } from "@/lib/types";
 
 export function ServiceCard({ service, categoryName }: { service: Service; categoryName?: string }) {
+  const hasDiscount = typeof service.compareAtPriceMad === "number" && service.compareAtPriceMad > service.priceMad;
+  const discountPercent = hasDiscount ? Math.round(((service.compareAtPriceMad! - service.priceMad) / service.compareAtPriceMad!) * 100) : 0;
+
   return (
     <article className="service-card">
       <Link href={`/service/${service.slug}`} aria-label={`عرض تفاصيل ${service.title}`} className="service-card-link">
@@ -14,6 +17,8 @@ export function ServiceCard({ service, categoryName }: { service: Service; categ
             <span className="service-glyph" aria-hidden="true">{service.title.slice(0, 2).toUpperCase()}</span>
           )}
           {service.badge && <span className="tag tag-blue">{service.badge}</span>}
+          {service.promoteInCatalog && <span className="tag tag-updated">محدّث</span>}
+          {hasDiscount && <span className="sale-chip">تخفيض {discountPercent}%</span>}
         </div>
         <div className="service-card-content">
           <p className="eyebrow">{categoryName || "خدمة رقمية"}</p>
@@ -22,7 +27,7 @@ export function ServiceCard({ service, categoryName }: { service: Service; categ
         </div>
         <div className="service-meta"><Clock3 size={15} /> {service.delivery}</div>
         <div className="service-card-footer">
-          <strong>{formatMAD(service.priceMad)}</strong>
+          <span className="service-price-stack">{hasDiscount && <del>{formatMAD(service.compareAtPriceMad!)}</del>}<strong>{formatMAD(service.priceMad)}</strong></span>
           <span className="round-link" aria-hidden="true"><ArrowLeft size={17} /></span>
         </div>
       </Link>
