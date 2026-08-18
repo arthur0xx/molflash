@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { adminDb } from "@/lib/firebase/admin";
 import { requireVerifiedUser } from "@/lib/api/admin-auth";
-import { expiresPaymentReference, generatePaymentReference, renderPaymentInstructions, toPaymentMethodSnapshot } from "@/lib/payments";
+import { expiresPaymentReference, generatePaymentReference, renderPaymentSnapshotInstructions, toPaymentMethodSnapshot } from "@/lib/payments";
+import { validatePaymentMethod } from "@/lib/payment-method-validation";
 import type { PaymentMethod, PaymentRecord } from "@/lib/types";
 
 const createPaymentSchema = z.discriminatedUnion("purpose", [
@@ -26,7 +27,7 @@ export async function GET(request: NextRequest) {
     const snapshot = await db.collection("paymentMethods").where("status", "==", "active").get();
     const methods = snapshot.docs
       .map((document) => ({ id: document.id, ...document.data() } as PaymentMethod))
-      .filter((method) => method.type !== "electronic_gateway")
+      .filter((method) => method.type !== "electronic_gateway" && !validatePaymentMethod(method))
       .sort((left, right) => left.sortOrder - right.sortOrder)
       .map((method) => ({ id: method.id, title: method.title, type: method.type, scope: method.scope }));
     return NextResponse.json({ methods });
@@ -63,7 +64,7 @@ export async function POST(request: NextRequest) {
           if (!methodSnapshot.exists) throw new PaymentRouteError("وسيلة الدفع غير متاحة", 404);
 
           const method = { id: methodSnapshot.id, ...methodSnapshot.data() } as PaymentMethod;
-          if (method.status !== "active" || method.type === "electronic_gateway" || !supportsScope(method, parsed.data.purpose)) {
+          if (method.status !== "active" || method.type === "electronic_gateway" || !supportsScope(method, parsed.data.purpose) || validatePaymentMethod(method)) {
             throw new PaymentRouteError("وسيلة الدفع غير متاحة لهذه العملية", 409);
           }
 
@@ -113,7 +114,7 @@ export async function POST(request: NextRequest) {
 
         return NextResponse.json({
           payment: result,
-          instructions: renderPaymentInstructions(result.methodSnapshot.instructions, {
+          instructions: renderPaymentSnapshotInstructions(result.methodSnapshot, {
             amount: `${result.amountMad} د.م.`,
             paymentReference: result.paymentReference,
             orderNumber: result.orderId || "",

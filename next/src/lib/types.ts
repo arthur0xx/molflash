@@ -113,6 +113,40 @@ export interface Order {
   archivedBy?: string;
 }
 
+export interface PaymentMethodBankDetails {
+  /** الاسم القانوني المطابق تمامًا لصاحب الحساب المستفيد. */
+  beneficiaryName?: string;
+  /** RIB مغربي محلي مكون من 24 رقمًا؛ لا يقبل IBAN أو رقم بطاقة. */
+  rib?: string;
+  bankName?: string;
+  /** يُعرض فقط عند تقديم المالك لتحويلات دولية بصورة منفصلة. */
+  swiftCode?: string;
+  branchName?: string;
+  /** تذكير مختصر بكيفية كتابة المرجع الفريد في التحويل. */
+  referenceNote?: string;
+}
+
+export interface PaymentMethodCashTransferDetails {
+  /** الاسم الذي يقدمه العميل لموظف الوكالة لصالح التحويل. */
+  beneficiaryName?: string;
+  /** اسم الشبكة مثل Cash Plus أو Tashilat، إن كان منطبقًا. */
+  agencyNetwork?: string;
+  /** خطوات الوكالة التي يراها العميل بعد إنشاء المرجع. */
+  agencyInstructions?: string;
+}
+
+export interface PaymentGatewayConfig {
+  /** تعريف غير سري فقط؛ تبقى مفاتيح API في متغيرات خادمية ولا تُخزّن هنا. */
+  provider: "cmi" | "payzone" | "cash_plus_payment";
+  merchantId?: string;
+  environment: "sandbox" | "production";
+  /** مسار داخلي فقط لاستقبال إشعارات المزود في المستقبل. */
+  callbackPath?: string;
+  /** رابط مستضاف يقدمه المزود؛ لا يُستخدم قبل التعاقد والاختبار الرسمي. */
+  hostedPageUrl?: string;
+  status: "draft" | "testing" | "active";
+}
+
 export interface PaymentMethod {
   id: string;
   title: string;
@@ -120,9 +154,14 @@ export interface PaymentMethod {
   type: PaymentMethodType;
   status: PaymentMethodStatus;
   scope: PaymentScope;
+  /** تعليمات عامة قصيرة؛ تُستكمل بالحقول المنظمة أدناه عند وجودها. */
   instructions: string;
+  bankDetails?: PaymentMethodBankDetails;
+  cashTransferDetails?: PaymentMethodCashTransferDetails;
+  gatewayConfig?: PaymentGatewayConfig;
   sortOrder: number;
-  provider?: "cmi" | "payzone" | "custom";
+  /** متوافق مع السجلات القديمة؛ البوابة الجديدة تعتمد gatewayConfig.provider. */
+  provider?: "cmi" | "payzone" | "cash_plus_payment" | "custom";
   createdAt: string;
   updatedAt: string;
   createdBy: string;
@@ -133,6 +172,8 @@ export interface PaymentMethodSnapshot {
   title: string;
   type: PaymentMethodType;
   instructions: string;
+  bankDetails?: PaymentMethodBankDetails;
+  cashTransferDetails?: PaymentMethodCashTransferDetails;
 }
 
 export interface PaymentProof {

@@ -1,26 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
 import { adminDb } from "@/lib/firebase/admin";
 import { requireOwner } from "@/lib/api/admin-auth";
-import type { PaymentMethod, PaymentMethodType } from "@/lib/types";
-
-const patchSchema = z.object({
-  title: z.string().trim().min(2, "اسم وسيلة الدفع قصير جدًا").max(100, "اسم وسيلة الدفع طويل جدًا").optional(),
-  code: z.string().trim().toLowerCase().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "معرف وسيلة الدفع غير صحيح").min(2).max(60).optional(),
-  type: z.enum(["cash_transfer", "bank_transfer", "electronic_gateway"]).optional(),
-  status: z.enum(["draft", "active", "disabled"]).optional(),
-  scope: z.enum(["order", "wallet_topup", "both"]).optional(),
-  instructions: z.string().trim().max(2400, "تعليمات الدفع طويلة جدًا").optional(),
-  sortOrder: z.number().int().min(0).max(10000).optional(),
-  provider: z.enum(["cmi", "payzone", "custom"]).optional(),
-}).refine((value) => Object.keys(value).length > 0, "لا يوجد تغيير للحفظ");
-
-function validateEffectiveMethod(method: Pick<PaymentMethod, "type" | "status" | "instructions" | "provider">) {
-  if (method.type === "electronic_gateway" && method.status === "active") return "لا يمكن تفعيل بوابة إلكترونية قبل اكتمال الربط الخادمي واختبارها.";
-  if (method.type !== "electronic_gateway" && method.status === "active" && method.instructions.trim().length < 8) return "اكتب تعليمات تحويل واضحة قبل تفعيل الوسيلة.";
-  if (method.type === "electronic_gateway" && !method.provider) return "حدد مزود البوابة الإلكترونية.";
-  return null;
-}
+import { paymentMethodPatchSchema, providerForPaymentMethod, validatePaymentMethod } from "@/lib/payment-method-validation";
+import type { PaymentMethod } from "@/lib/types";
 
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const owner = await requireOwner(request);
@@ -34,7 +16,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     const methodId = id.trim();
     if (!methodId) return NextResponse.json({ error: "معرف وسيلة الدفع غير صحيح" }, { status: 400 });
 
-    const parsed = patchSchema.safeParse(await request.json());
+    const parsed = paymentMethodPatchSchema.safeParse(await request.json());
     if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message || "بيانات وسيلة الدفع غير صحيحة" }, { status: 400 });
 
     const reference = db.collection("paymentMethods").doc(methodId);
@@ -44,16 +26,18 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       if (!snapshot.exists) throw new PaymentMethodRouteError("وسيلة الدفع غير موجودة", 404);
       const current = { id: snapshot.id, ...snapshot.data() } as PaymentMethod;
       const nextType = parsed.data.type || current.type;
-      const nextProvider = nextType === "electronic_gateway" ? parsed.data.provider || current.provider || "custom" : "custom";
       const next = {
         ...current,
         ...parsed.data,
-        type: nextType as PaymentMethodType,
-        provider: nextProvider,
+        type: nextType,
         updatedAt: now,
         updatedBy: owner.uid,
       } as PaymentMethod;
-      const validationError = validateEffectiveMethod(next);
+      if (nextType !== "bank_transfer") delete next.bankDetails;
+      if (nextType !== "cash_transfer") delete next.cashTransferDetails;
+      if (nextType !== "electronic_gateway") delete next.gatewayConfig;
+      next.provider = providerForPaymentMethod(next);
+      const validationError = validatePaymentMethod(next);
       if (validationError) throw new PaymentMethodRouteError(validationError, 409);
 
       if (parsed.data.code && parsed.data.code !== current.code) {

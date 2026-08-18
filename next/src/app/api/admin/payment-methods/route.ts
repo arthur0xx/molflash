@@ -1,36 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
 import { adminDb } from "@/lib/firebase/admin";
 import { requireOwner } from "@/lib/api/admin-auth";
-import type { PaymentMethod, PaymentMethodType } from "@/lib/types";
-
-const methodTypeSchema = z.enum(["cash_transfer", "bank_transfer", "electronic_gateway"]);
-const providerSchema = z.enum(["cmi", "payzone", "custom"]);
-
-const paymentMethodSchema = z.object({
-  title: z.string().trim().min(2, "اسم وسيلة الدفع قصير جدًا").max(100, "اسم وسيلة الدفع طويل جدًا"),
-  code: z.string().trim().toLowerCase().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "معرف وسيلة الدفع غير صحيح").min(2).max(60),
-  type: methodTypeSchema,
-  status: z.enum(["draft", "active", "disabled"]).default("draft"),
-  scope: z.enum(["order", "wallet_topup", "both"]).default("both"),
-  instructions: z.string().trim().max(2400, "تعليمات الدفع طويلة جدًا").default(""),
-  sortOrder: z.number().int().min(0).max(10000).default(100),
-  provider: providerSchema.optional(),
-}).superRefine((method, context) => {
-  if (method.type === "electronic_gateway" && method.status === "active") {
-    context.addIssue({ code: "custom", path: ["status"], message: "لا يمكن تفعيل بوابة إلكترونية قبل اكتمال الربط الخادمي واختبارها." });
-  }
-  if (method.type !== "electronic_gateway" && method.status === "active" && method.instructions.trim().length < 8) {
-    context.addIssue({ code: "custom", path: ["instructions"], message: "اكتب تعليمات تحويل واضحة قبل تفعيل الوسيلة." });
-  }
-  if (method.type === "electronic_gateway" && !method.provider) {
-    context.addIssue({ code: "custom", path: ["provider"], message: "حدد مزود البوابة الإلكترونية." });
-  }
-});
-
-function providerFor(type: PaymentMethodType, provider?: "cmi" | "payzone" | "custom") {
-  return type === "electronic_gateway" ? provider || "custom" : "custom" as const;
-}
+import { paymentMethodCreateSchema, providerForPaymentMethod } from "@/lib/payment-method-validation";
+import type { PaymentMethod } from "@/lib/types";
 
 export async function GET(request: NextRequest) {
   const owner = await requireOwner(request);
@@ -56,7 +28,7 @@ export async function POST(request: NextRequest) {
   if (!db) return NextResponse.json({ error: "إعداد الدفع غير متاح حاليًا" }, { status: 503 });
 
   try {
-    const parsed = paymentMethodSchema.safeParse(await request.json());
+    const parsed = paymentMethodCreateSchema.safeParse(await request.json());
     if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message || "بيانات وسيلة الدفع غير صحيحة" }, { status: 400 });
 
     const existing = await db.collection("paymentMethods").where("code", "==", parsed.data.code).limit(1).get();
@@ -67,7 +39,7 @@ export async function POST(request: NextRequest) {
     const method: PaymentMethod = {
       id: reference.id,
       ...parsed.data,
-      provider: providerFor(parsed.data.type, parsed.data.provider),
+      provider: providerForPaymentMethod(parsed.data),
       createdAt: now,
       updatedAt: now,
       createdBy: owner.uid,
