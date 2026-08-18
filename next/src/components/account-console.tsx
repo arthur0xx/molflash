@@ -6,12 +6,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
 import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore";
-import { BellRing, CheckCircle2, ChevronDown, ClipboardList, KeyRound, LogOut, MailCheck, MessageCircle, Settings2, ShieldCheck, Smartphone, UserRound, WalletCards } from "lucide-react";
-import { formatMAD, statusLabels, type OrderNotification, type OrderStatus, type SupportTicket } from "@/lib/types";
+import { Banknote, BellRing, CheckCircle2, ChevronDown, ClipboardList, Copy, KeyRound, Landmark, LogOut, MailCheck, MessageCircle, Settings2, ShieldCheck, Smartphone, UserRound, WalletCards } from "lucide-react";
+import { formatMAD, statusLabels, type OrderNotification, type OrderStatus, type PaymentRecord, type SupportTicket } from "@/lib/types";
 import { firebaseServices } from "@/lib/firebase/client";
 import { completeGoogleLinkRedirect, linkGoogleToCurrentUser, requestPasswordReset, signOut } from "@/lib/auth";
 import { MediaImageControl } from "@/components/media-image-control";
 import { CustomerOnboarding } from "@/components/customer-onboarding";
+import { WhatsAppSupportLink } from "@/components/whatsapp-support-link";
 import { requestSignedMediaUpload, uploadSignedMediaImage } from "@/lib/media-upload";
 
 const orderTone = (status: OrderStatus) => ({ new: "blue", processing: "amber", waiting: "violet", completed: "green", rejected: "red" }[status]);
@@ -20,6 +21,8 @@ type CustomerProfile = { id: string; fullName: string; phone: string; email: str
 type AccountOrder = { id: string; customerId: string; customerName: string; customerPhone: string; customerEmail: string; serviceId: string; serviceTitle: string; totalMad: number; status: OrderStatus; createdAt: string; updatedAt: string; answers: Record<string, string>; deliveryCode?: string; deliveryNote?: string; statusHistory: Array<{ status: OrderStatus; at: string; note: string }>; notification?: OrderNotification };
 type AccountState = "loading" | "signed-out" | "blocked" | "ready" | "error";
 type AccountNotice = { id: number; tone: "success" | "info"; message: string } | null;
+type AvailablePaymentMethod = { id: string; title: string; type: "cash_transfer" | "bank_transfer"; scope: "order" | "wallet_topup" | "both" };
+type CreatedPayment = { payment: PaymentRecord; instructions: string };
 
 function asString(value: unknown, fallback = "") { return typeof value === "string" ? value : fallback; }
 function asNumber(value: unknown, fallback = 0) { return typeof value === "number" ? value : fallback; }
@@ -42,6 +45,7 @@ export function AccountConsole() {
   const [error, setError] = useState("");
   const [customer, setCustomer] = useState<CustomerProfile | null>(null);
   const [orders, setOrders] = useState<AccountOrder[]>([]);
+  const [payments, setPayments] = useState<PaymentRecord[]>([]);
   const [profileDraft, setProfileDraft] = useState<Pick<CustomerProfile, "fullName" | "phone" | "email">>({ fullName: "", phone: "", email: "" });
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [showSettings, setShowSettings] = useState(false);
@@ -62,6 +66,14 @@ export function AccountConsole() {
   const [googleLinked, setGoogleLinked] = useState(false);
   const [googleLinkState, setGoogleLinkState] = useState<"idle" | "linking" | "linked" | "redirecting" | "conflict" | "error">("idle");
   const [notice, setNotice] = useState<AccountNotice>(null);
+  const [showWalletTopUp, setShowWalletTopUp] = useState(false);
+  const [topUpAmount, setTopUpAmount] = useState("");
+  const [topUpMethods, setTopUpMethods] = useState<AvailablePaymentMethod[]>([]);
+  const [selectedTopUpMethodId, setSelectedTopUpMethodId] = useState("");
+  const [topUpLoading, setTopUpLoading] = useState(false);
+  const [topUpSaving, setTopUpSaving] = useState(false);
+  const [topUpError, setTopUpError] = useState("");
+  const [createdTopUp, setCreatedTopUp] = useState<CreatedPayment | null>(null);
 
   function showNotice(message: string, tone: "success" | "info" = "success") {
     setNotice({ id: Date.now(), tone, message });
@@ -70,7 +82,7 @@ export function AccountConsole() {
   useEffect(() => {
     if (!firebase) return;
     return onAuthStateChanged(firebase.auth, async (user) => {
-      if (!user) { setAccountState((current) => current === "blocked" ? "blocked" : "signed-out"); setCustomer(null); setOrders([]); setGoogleLinked(false); return; }
+      if (!user) { setAccountState((current) => current === "blocked" ? "blocked" : "signed-out"); setCustomer(null); setOrders([]); setPayments([]); setGoogleLinked(false); return; }
       setGoogleLinked(user.providerData.some((provider) => provider.providerId === "google.com"));
       try {
         const tokenResult = await user.getIdTokenResult(true);
@@ -102,10 +114,12 @@ export function AccountConsole() {
           return toOrder(orderDoc.id, raw, profile, serviceTitle);
         }));
         loadedOrders.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+        const paymentSnapshot = await getDocs(query(collection(firebase.db, "payments"), where("customerId", "==", user.uid)));
+        const loadedPayments = paymentSnapshot.docs.map((paymentDoc) => ({ id: paymentDoc.id, ...paymentDoc.data() } as PaymentRecord)).sort((left, right) => right.createdAt.localeCompare(left.createdAt));
         const supportResponse = await fetch("/api/support", { headers: { Authorization: `Bearer ${await user.getIdToken()}` } });
         const supportResult = await supportResponse.json().catch(() => ({})) as { tickets?: SupportTicket[]; error?: string };
         if (!supportResponse.ok) throw new Error(supportResult.error || "تعذر تحميل رسائل الدعم.");
-        setCustomer(profile); setProfileDraft({ fullName: profile.fullName, phone: profile.phone, email: profile.email }); setOrders(loadedOrders); setTickets(supportResult.tickets || []); setAccountState("ready"); setError("");
+        setCustomer(profile); setProfileDraft({ fullName: profile.fullName, phone: profile.phone, email: profile.email }); setOrders(loadedOrders); setPayments(loadedPayments); setTickets(supportResult.tickets || []); setAccountState("ready"); setError("");
       } catch (reason) { setAccountState("error"); setError(reason instanceof Error ? reason.message : "تعذر تحميل بيانات الحساب."); }
     });
   }, [firebase, router]);
@@ -127,6 +141,56 @@ export function AccountConsole() {
   }, []);
 
   const unreadNotifications = orders.filter((order) => order.status === "completed" && order.notification);
+  const pendingPayments = payments.filter((payment) => payment.status === "manual_transfer_pending" || payment.status === "under_review");
+
+  async function loadWalletTopUpMethods() {
+    const user = firebase?.auth.currentUser;
+    if (!user) throw new Error("سجّل الدخول أولًا لشحن الرصيد.");
+    setTopUpLoading(true);
+    try {
+      const response = await fetch("/api/payments", { headers: { Authorization: `Bearer ${await user.getIdToken()}` } });
+      const result = await response.json().catch(() => ({})) as { methods?: AvailablePaymentMethod[]; error?: string };
+      if (!response.ok) throw new Error(result.error || "تعذر تحميل وسائل شحن الرصيد.");
+      const methods = (result.methods || []).filter((method) => method.scope === "wallet_topup" || method.scope === "both");
+      setTopUpMethods(methods);
+      setSelectedTopUpMethodId((current) => current && methods.some((method) => method.id === current) ? current : methods[0]?.id || "");
+      return methods;
+    } finally { setTopUpLoading(false); }
+  }
+
+  async function openWalletTopUp() {
+    setShowWalletTopUp((open) => !open);
+    setTopUpError("");
+    setCreatedTopUp(null);
+    if (!showWalletTopUp && topUpMethods.length === 0) {
+      try { await loadWalletTopUpMethods(); } catch (reason) { setTopUpError(reason instanceof Error ? reason.message : "تعذر تحميل وسائل شحن الرصيد."); }
+    }
+  }
+
+  async function createWalletTopUp() {
+    const user = firebase?.auth.currentUser;
+    const amountMad = Number(topUpAmount.trim().replace(",", "."));
+    if (!user) { setTopUpError("سجّل الدخول أولًا لشحن الرصيد."); return; }
+    if (!Number.isFinite(amountMad) || amountMad <= 0 || amountMad > 1_000_000 || Math.round(amountMad * 100) !== amountMad * 100) { setTopUpError("أدخل مبلغًا صحيحًا أكبر من صفر وبمنزلتين عشريتين كحد أقصى."); return; }
+    if (!selectedTopUpMethodId) { setTopUpError("اختر وسيلة التحويل أولًا."); return; }
+    try {
+      setTopUpSaving(true); setTopUpError("");
+      const response = await fetch("/api/payments", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${await user.getIdToken()}` }, body: JSON.stringify({ purpose: "wallet_topup", amountMad, methodId: selectedTopUpMethodId }) });
+      const result = await response.json().catch(() => ({})) as Partial<CreatedPayment> & { error?: string };
+      if (!response.ok || !result.payment || typeof result.instructions !== "string") throw new Error(result.error || "تعذر إنشاء مرجع شحن الرصيد.");
+      const created = { payment: result.payment, instructions: result.instructions };
+      setCreatedTopUp(created);
+      setPayments((previous) => [created.payment, ...previous]);
+      showNotice("تم إنشاء مرجع تحويل لشحن الرصيد. ينتظر المراجعة اليدوية.", "info");
+    } catch (reason) { setTopUpError(reason instanceof Error ? reason.message : "تعذر إنشاء مرجع شحن الرصيد."); }
+    finally { setTopUpSaving(false); }
+  }
+
+  async function copyPaymentReference(reference: string) {
+    try { await navigator.clipboard.writeText(reference); showNotice("تم نسخ مرجع التحويل.", "info"); }
+    catch { showNotice("تعذر النسخ تلقائيًا؛ انسخ المرجع يدويًا.", "info"); }
+  }
+
   async function submitProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const user = firebase?.auth.currentUser;
@@ -263,13 +327,26 @@ export function AccountConsole() {
     <AccountNotice notice={notice} onDismiss={() => setNotice(null)}/>
     <section className="account-hero"><div className="account-identity"><AccountAvatar customer={customer} size="hero"/><div><p className="eyebrow">منطقة العميل</p><h1>مرحبًا، {customer.fullName}</h1><p>{customer.email}</p></div></div><div className="wallet-hero"><WalletCards size={22}/><span>رصيد المحفظة</span><strong>{formatMAD(customer.walletMad)}</strong></div></section>
     <CustomerOnboarding customerId={customer.id} firstName={customer.fullName.split(" ")[0] || "بك"} hasOrders={orders.length > 0}/>
+    <WalletTopUpPanel open={showWalletTopUp} loadingMethods={topUpLoading} saving={topUpSaving} amount={topUpAmount} methods={topUpMethods} selectedMethodId={selectedTopUpMethodId} createdPayment={createdTopUp} error={topUpError} onToggle={() => { void openWalletTopUp(); }} onAmountChange={setTopUpAmount} onSelectMethod={setSelectedTopUpMethodId} onCreate={() => { void createWalletTopUp(); }} onCopy={copyPaymentReference}/>
+    {pendingPayments.length > 0 && (
+      <PendingPayments payments={pendingPayments} onCopy={copyPaymentReference}/>
+    )}
     {unreadNotifications.length > 0 && <section className="order-notification"><BellRing size={21}/><div><p>إشعار الطلب</p><b>{unreadNotifications[0].notification?.title}</b><span>{unreadNotifications[0].notification?.body}</span></div><span className="status-pill green">تم التسليم</span></section>}
     <section className="account-actions" aria-label="إجراءات الحساب"><button type="button" className={showSettings ? "active" : ""} aria-expanded={showSettings} aria-controls="account-settings-panel" onClick={() => { setShowSettings(!showSettings); setShowSupport(false); }}><Settings2 size={18}/><span>إعدادات الحساب</span><ChevronDown size={15}/></button><button type="button" className={showSupport ? "active" : ""} aria-expanded={showSupport} aria-controls="account-support-panel" onClick={() => { setShowSupport(!showSupport); setShowSettings(false); }}><MessageCircle size={18}/><span>الدعم الفني</span><ChevronDown size={15}/></button><button type="button" className="account-logout" onClick={handleSignOut}><LogOut size={18}/><span>تسجيل الخروج</span></button></section>
     {showSettings && <section id="account-settings-panel" className="account-panel account-reveal"><div className="panel-heading"><div><p className="eyebrow">بيانات العميل</p><h2>إعدادات الحساب</h2></div><UserRound size={22}/></div><MediaImageControl imageUrl={customer.avatarUrl} alt={`صورة ${customer.fullName}`} fallbackLabel={customer.fullName} kind="profile" onSelect={uploadProfileImage} onRemove={removeProfileImage} disabled={profileSaving} uploading={avatarUploading}/>{avatarError && <p className="form-error" role="alert">{avatarError}</p>}<form className="settings-form" onSubmit={submitProfile}><label><span>الاسم الكامل</span><input value={profileDraft.fullName} onChange={(event) => setProfileDraft({ ...profileDraft, fullName: event.target.value })} required disabled={profileSaving}/></label><label><span>رقم الهاتف</span><input type="tel" value={profileDraft.phone} onChange={(event) => setProfileDraft({ ...profileDraft, phone: event.target.value })} required disabled={profileSaving}/></label><label><span>البريد الإلكتروني</span><input type="email" value={profileDraft.email} readOnly disabled aria-describedby="email-managed-note"/></label><p className="muted-text" id="email-managed-note">يُستخدم هذا البريد للدخول واستعادة كلمة المرور.</p><section className="notification-settings" aria-labelledby="notification-settings-title"><div className="notification-heading"><div><p className="eyebrow">إشعارات الحساب</p><h3 id="notification-settings-title">اختر قنوات التحديث</h3><p>تصلك حالات الطلب والتسليم عبر القنوات التي تفعلها فقط.</p></div><BellRing size={21}/></div><label className="notification-choice"><span><MailCheck size={18}/><b>البريد الإلكتروني</b><small>رسائل التحقق واستعادة كلمة المرور وتحديثات الطلب.</small></span><input type="checkbox" checked={customer.notificationPreferences.email} disabled={notificationSaving} onChange={(event) => { void saveNotificationPreferences({ ...customer.notificationPreferences, email: event.target.checked }); }}/></label><label className="notification-choice"><span><Smartphone size={18}/><b>واتساب</b><small>{customer.phoneVerifiedAt ? `الرقم المؤكد: ${customer.phone}` : "يتطلب تأكيد رقم هاتف مغربي برمز يصل إلى واتساب."}</small></span><input type="checkbox" checked={customer.notificationPreferences.whatsapp} disabled={!customer.phoneVerifiedAt || notificationSaving} onChange={(event) => { void saveNotificationPreferences({ ...customer.notificationPreferences, whatsapp: event.target.checked }); }}/></label>{!customer.phoneVerifiedAt && <div className="phone-verification"><div><b>تأكيد رقم واتساب</b><p>احفظ رقم الهاتف أعلاه أولًا إن عدّلته، ثم أرسل رمز التأكيد.</p></div><button type="button" className="outline-button" onClick={() => { void requestPhoneVerification(); }} disabled={phoneVerificationState === "sending" || phoneVerificationState === "verifying"}>{phoneVerificationState === "sending" ? "جارٍ الإرسال..." : "إرسال رمز"}</button>{(phoneVerificationState === "sent" || phoneVerificationState === "error" || phoneVerificationState === "verifying") && <div className="phone-verification-code"><input inputMode="numeric" pattern="[0-9]*" maxLength={6} value={phoneVerificationCode} onChange={(event) => setPhoneVerificationCode(event.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="رمز من 6 أرقام" aria-label="رمز تأكيد واتساب"/><button type="button" className="primary-button" onClick={() => { void confirmPhoneVerification(); }} disabled={phoneVerificationCode.length !== 6 || phoneVerificationState === "verifying"}>{phoneVerificationState === "verifying" ? "جارٍ التأكيد..." : "تأكيد الرقم"}</button></div>}{phoneVerificationState === "sent" && <p className="password-reset-status success" role="status">أرسلنا رمزًا إلى رقم واتساب. تنتهي صلاحيته خلال 10 دقائق.</p>}</div>}{notificationError && <p className="form-error" role="alert">{notificationError}</p>}</section><div className="settings-password google-account-link"><ShieldCheck size={18}/><div><b>تسجيل الدخول عبر Google</b><p>{googleLinked ? "تم ربط حساب Google بهذا الحساب. يمكنك استخدامه في المرات القادمة." : "اربط Google بعد تسجيل الدخول بالبريد وكلمة المرور لتتمكن من الدخول بالطريقتين."}</p>{googleLinkState === "linked" && <p className="password-reset-status success" role="status">تم ربط Google بالحساب بنجاح.</p>}{googleLinkState === "redirecting" && <p className="password-reset-status success" role="status">جارٍ فتح Google لإتمام الربط…</p>}{googleLinkState === "conflict" && <p className="password-reset-status error" role="alert">هذا حساب Google مرتبط بحساب ChriGsm آخر ولا يمكن دمجه تلقائيًا.</p>}{googleLinkState === "error" && <p className="password-reset-status error" role="alert">تعذر ربط Google حاليًا. حاول مرة أخرى.</p>}</div><button type="button" className="outline-button" onClick={() => { void connectGoogleAccount(); }} disabled={googleLinked || googleLinkState === "linking"}>{googleLinked ? "Google مرتبط" : googleLinkState === "linking" ? "جارٍ فتح Google..." : "ربط Google"}</button></div><div className="settings-password"><KeyRound size={18}/><div><b>كلمة المرور</b><p>سنرسل رابطًا آمنًا إلى بريدك لتعيين كلمة مرور جديدة.</p>{passwordResetState === "sent" && <p className="password-reset-status success" role="status">إذا كان البريد مرتبطًا بحساب ChriGsm، ستصلك رسالة لإعادة تعيين كلمة المرور.</p>}{passwordResetState === "error" && <p className="password-reset-status error" role="alert">استعادة كلمة المرور غير متاحة حاليًا. تحقق من اتصالك ثم حاول لاحقًا.</p>}</div><button type="button" className="outline-button" onClick={sendAccountPasswordReset} disabled={passwordResetState === "sending"}>{passwordResetState === "sending" ? "جارٍ الإرسال..." : "إرسال رابط التغيير"}</button></div><div className="form-actions"><button className="primary-button" type="submit" disabled={profileSaving}>{profileSaving ? "جارٍ الحفظ..." : "حفظ التغييرات"}</button>{profileSaved && <span className="saved-inline"><CheckCircle2 size={16}/> حُفظت إعدادات الحساب</span>}{profileError && <span className="form-error" role="alert">{profileError}</span>}</div></form></section>}
-    {showSupport && <section id="account-support-panel" className="account-panel account-reveal"><div className="panel-heading"><div><p className="eyebrow">مساعدة الطلبات والحساب</p><h2>الدعم الفني</h2></div><MessageCircle size={22}/></div><p className="panel-intro">أرسل رسالتك وسيتابعها فريق الدعم من داخل المتجر.</p><form className="support-form" onSubmit={submitSupport}><label><span>موضوع الرسالة</span><input name="subject" placeholder="مثال: أحتاج مساعدة في طلبي" minLength={4} required disabled={supportSaving}/></label><label><span>تفاصيل المشكلة</span><textarea name="message" placeholder="اكتب رقم الطلب أو اشرح ما تحتاجه..." minLength={10} required disabled={supportSaving}/></label><button className="primary-button" type="submit" disabled={supportSaving}>{supportSaving ? "جارٍ الإرسال..." : "إرسال طلب الدعم"}</button>{ticketSaved && <span className="saved-inline"><CheckCircle2 size={16}/> تم إرسال طلب الدعم</span>}{supportError && <span className="form-error">{supportError}</span>}</form>{tickets.length > 0 && <div className="ticket-list"><h3>رسائلي للدعم</h3>{tickets.map((ticket) => <article key={ticket.id}><div><b>{ticket.subject}</b><p>{ticket.message}</p>{ticket.reply && <div className="ticket-reply"><b>رد CMC</b><p>{ticket.reply.message}</p></div>}</div><span>{ticket.status === "open" ? "مفتوح" : "تم الرد"}</span></article>)}</div>}</section>}
+    {showSupport && <section id="account-support-panel" className="account-panel account-reveal"><div className="panel-heading"><div><p className="eyebrow">مساعدة الطلبات والحساب</p><h2>الدعم الفني</h2></div><MessageCircle size={22}/></div><p className="panel-intro">أرسل تذكرة من حسابك للمتابعة المنظمة، أو افتح واتساب عند الحاجة إلى مساعدة سريعة.</p><div className="support-quick-actions"><WhatsAppSupportLink label="فتح واتساب الدعم" message="مرحبًا، أحتاج مساعدة بخصوص حسابي أو طلب في ChriGsm." /></div><form className="support-form" onSubmit={submitSupport}><label><span>موضوع الرسالة</span><input name="subject" placeholder="مثال: أحتاج مساعدة في طلبي" minLength={4} required disabled={supportSaving}/></label><label><span>تفاصيل المشكلة</span><textarea name="message" placeholder="اكتب رقم الطلب أو اشرح ما تحتاجه..." minLength={10} required disabled={supportSaving}/></label><button className="primary-button" type="submit" disabled={supportSaving}>{supportSaving ? "جارٍ الإرسال..." : "إرسال طلب الدعم"}</button>{ticketSaved && <span className="saved-inline"><CheckCircle2 size={16}/> تم إرسال طلب الدعم</span>}{supportError && <span className="form-error">{supportError}</span>}</form>{tickets.length > 0 && <div className="ticket-list"><h3>رسائلي للدعم</h3>{tickets.map((ticket) => <article key={ticket.id}><div><b>{ticket.subject}</b><p>{ticket.message}</p>{ticket.reply && <div className="ticket-reply"><b>رد CMC</b><p>{ticket.reply.message}</p></div>}</div><span>{ticket.status === "open" ? "مفتوح" : "تم الرد"}</span></article>)}</div>}</section>}
     <section className="section-block"><div className="section-title"><div><p className="eyebrow">متابعة مباشرة</p><h2>طلباتي</h2></div><span className="muted-text">{orders.length} طلبات</span></div>{orders.length ? <div className="order-list">{orders.map((order) => <OrderRow key={order.id} order={order} />)}</div> : <section className="account-empty-orders"><ClipboardList size={25}/><div><h3>لا توجد طلبات بعد</h3><p>اختر خدمة مناسبة، ثم ستظهر هنا كل مراحل المعالجة والتسليم.</p></div><Link className="outline-button" href="/catalog">استكشف الخدمات</Link></section>}</section>
     <section className="security-note"><ShieldCheck size={21}/><div><h3>خصوصية حسابك مهمة</h3><p>لا يطّلع على طلباتك وبياناتك إلا أنت وفريق المتجر عند الحاجة إلى المتابعة.</p></div></section>
   </main>;
+}
+
+function WalletTopUpPanel({ open, loadingMethods, saving, amount, methods, selectedMethodId, createdPayment, error, onToggle, onAmountChange, onSelectMethod, onCreate, onCopy }: { open: boolean; loadingMethods: boolean; saving: boolean; amount: string; methods: AvailablePaymentMethod[]; selectedMethodId: string; createdPayment: CreatedPayment | null; error: string; onToggle: () => void; onAmountChange: (value: string) => void; onSelectMethod: (value: string) => void; onCreate: () => void; onCopy: (reference: string) => Promise<void>; }) {
+  return <section className={`wallet-topup-panel${open ? " open" : ""}`}><div className="wallet-topup-heading"><div><p className="eyebrow">رصيد ChriGsm</p><h2>شحن الرصيد</h2><p>أنشئ مرجعًا فريدًا للتحويل. لا يُضاف الرصيد إلا بعد التحقق اليدوي من المالك.</p></div><button type="button" className="outline-button" onClick={onToggle}>{open ? "إغلاق" : "شحن الرصيد"}</button></div>{open && <div className="wallet-topup-body">{createdPayment ? <div className="wallet-topup-created" role="status"><CheckCircle2 size={20}/><div><b>تم إنشاء مرجع شحن الرصيد.</b><p>حوّل {formatMAD(createdPayment.payment.amountMad)} واتبع التعليمات التالية ثم اكتب المرجع في سبب التحويل:</p><button type="button" className="payment-reference-copy" onClick={() => { void onCopy(createdPayment.payment.paymentReference); }}><code>{createdPayment.payment.paymentReference}</code><Copy size={15}/></button><pre>{createdPayment.instructions}</pre><small><ShieldCheck size={14}/> يضاف الرصيد فقط بعد المراجعة اليدوية.</small></div></div> : <>{loadingMethods ? <p className="muted-text">جارٍ تحميل وسائل شحن الرصيد...</p> : methods.length ? <><label className="wallet-topup-amount"><span>المبلغ بالدرهم المغربي</span><input type="number" inputMode="decimal" min="1" max="1000000" step="0.01" value={amount} onChange={(event) => onAmountChange(event.target.value)} placeholder="مثال: 100" disabled={saving}/></label><fieldset className="payment-method-options"><legend>وسيلة التحويل</legend>{methods.map((method) => <label key={method.id} className={`payment-method-option${selectedMethodId === method.id ? " selected" : ""}`}><input type="radio" name="walletPaymentMethod" checked={selectedMethodId === method.id} onChange={() => onSelectMethod(method.id)} disabled={saving}/>{method.type === "bank_transfer" ? <Landmark size={18}/> : <Banknote size={18}/>}<span><b>{method.title}</b><small>{method.type === "bank_transfer" ? "تحويل بنكي" : "تحويل نقدي"}</small></span></label>)}</fieldset><button type="button" className="primary-button" onClick={onCreate} disabled={saving || !selectedMethodId}>{saving ? "جارٍ إنشاء المرجع..." : "إنشاء مرجع التحويل"}</button></> : <p className="muted-text">لا توجد وسيلة شحن رصيد مفعلة حاليًا. تواصل مع الدعم للمساعدة.</p>}{error && <p className="form-error" role="alert">{error}</p>}</>}</div>}</section>;
+}
+
+function PendingPayments({ payments, onCopy }: { payments: PaymentRecord[]; onCopy: (reference: string) => Promise<void> }) {
+  const statusLabel: Record<PaymentRecord["status"], string> = { manual_transfer_pending: "بانتظار التحقق", under_review: "قيد المراجعة", confirmed: "مؤكد", rejected: "مرفوض", expired: "منتهي" };
+  return <section className="pending-payments"><div className="section-title"><div><p className="eyebrow">التحويلات المسجلة</p><h2>بانتظار مراجعة الدفع</h2></div><span className="muted-text">{payments.length} عملية</span></div><div className="pending-payment-list">{payments.map((payment) => <article key={payment.id}><div><span className={`status-pill ${payment.status === "under_review" ? "violet" : "amber"}`}>{statusLabel[payment.status]}</span><b>{formatMAD(payment.amountMad)}</b><p>{payment.purpose === "wallet_topup" ? "شحن رصيد" : `طلب رقم ${payment.orderId || "—"}`} · {payment.methodSnapshot.title}</p></div><button type="button" className="payment-reference-copy" onClick={() => { void onCopy(payment.paymentReference); }} aria-label="نسخ مرجع التحويل"><code>{payment.paymentReference}</code><Copy size={14}/></button></article>)}</div></section>;
 }
 
 function AccountNotice({ notice, onDismiss }: { notice: AccountNotice; onDismiss: () => void }) {

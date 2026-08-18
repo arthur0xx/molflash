@@ -38,6 +38,16 @@ service cloud.firestore {
       allow read: if owner() || (activeCustomer() && resource.data.customerId == request.auth.uid);
       allow write: if false;
     }
+    // لا يرى تعريفات وسائل الدفع أو مسودات البوابات إلا المالك؛ العرض الآمن للعميل يمر عبر API ويعيد الحقول اللازمة فقط.
+    match /paymentMethods/{methodId} {
+      allow read: if owner();
+      allow write: if false;
+    }
+    // يمكن للعميل قراءة تحويلاته فقط. الإنشاء والمراجعة وتغيير الحالة تتم جميعها عبر Firebase Admin ومسارات خادمية مدققة.
+    match /payments/{paymentId} {
+      allow read: if owner() || (activeCustomer() && resource.data.customerId == request.auth.uid);
+      allow write: if false;
+    }
     match /supportTickets/{ticketId} {
       allow read: if owner() || (activeCustomer() && resource.data.customerId == request.auth.uid);
       // الرسائل والردود تمر عبر مسارات خادمية تتحقق من الهوية وتسجل التدقيق؛ لا كتابة مباشرة.

@@ -6,7 +6,7 @@ import type { OrderStatus, StoreSnapshot } from "./types";
 export type StorefrontSnapshot = Pick<StoreSnapshot, "categories" | "services">;
 
 export function emptyStoreSnapshot(): StoreSnapshot {
-  return { categories: [], services: [], customers: [], orders: [], walletEntries: [] };
+  return { categories: [], services: [], customers: [], orders: [], walletEntries: [], paymentMethods: [], payments: [] };
 }
 
 /** Reads only active catalog data for public storefront pages. */
@@ -40,12 +40,14 @@ export async function getSnapshot(): Promise<StoreSnapshot> {
   const db = adminDb();
   if (!db) return emptyStoreSnapshot();
 
-  const [categories, services, customers, orders, walletEntries] = await Promise.all([
+  const [categories, services, customers, orders, walletEntries, paymentMethods, payments] = await Promise.all([
     db.collection("categories").orderBy("order").get(),
     db.collection("services").orderBy("title").get(),
     db.collection("customers").orderBy("fullName").get(),
     db.collection("orders").orderBy("updatedAt", "desc").get(),
     db.collection("walletEntries").orderBy("createdAt", "desc").get(),
+    db.collection("paymentMethods").orderBy("sortOrder", "asc").get(),
+    db.collection("payments").orderBy("updatedAt", "desc").get(),
   ]);
 
   return {
@@ -54,6 +56,8 @@ export async function getSnapshot(): Promise<StoreSnapshot> {
     customers: customers.docs.map((document) => ({ id: document.id, ...document.data() })) as StoreSnapshot["customers"],
     orders: orders.docs.map((document) => ({ id: document.id, ...document.data() })) as StoreSnapshot["orders"],
     walletEntries: walletEntries.docs.map((document) => ({ id: document.id, ...document.data() })) as StoreSnapshot["walletEntries"],
+    paymentMethods: paymentMethods.docs.map((document) => ({ id: document.id, ...document.data() })) as StoreSnapshot["paymentMethods"],
+    payments: payments.docs.map((document) => ({ id: document.id, ...document.data() })) as StoreSnapshot["payments"],
   };
 }
 
@@ -87,6 +91,8 @@ export async function getOrderStaffSnapshot(): Promise<StoreSnapshot> {
     }) as StoreSnapshot["customers"],
     orders,
     walletEntries: [],
+    paymentMethods: [],
+    payments: [],
   };
 }
 

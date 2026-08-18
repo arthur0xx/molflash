@@ -1,5 +1,10 @@
 export type Role = "admin" | "manager" | "customer";
 export type OrderStatus = "new" | "processing" | "waiting" | "completed" | "rejected";
+export type PaymentMethodType = "cash_transfer" | "bank_transfer" | "electronic_gateway";
+export type PaymentMethodStatus = "draft" | "active" | "disabled";
+export type PaymentScope = "order" | "wallet_topup" | "both";
+export type PaymentStatus = "manual_transfer_pending" | "under_review" | "confirmed" | "rejected" | "expired";
+export type PaymentPurpose = "order" | "wallet_topup";
 
 export interface Category {
   id: string;
@@ -108,6 +113,50 @@ export interface Order {
   archivedBy?: string;
 }
 
+export interface PaymentMethod {
+  id: string;
+  title: string;
+  code: string;
+  type: PaymentMethodType;
+  status: PaymentMethodStatus;
+  scope: PaymentScope;
+  instructions: string;
+  sortOrder: number;
+  provider?: "cmi" | "payzone" | "custom";
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
+  updatedBy: string;
+}
+
+export interface PaymentMethodSnapshot {
+  title: string;
+  type: PaymentMethodType;
+  instructions: string;
+}
+
+export interface PaymentRecord {
+  id: string;
+  customerId: string;
+  purpose: PaymentPurpose;
+  orderId?: string;
+  walletTopUpAmountMad?: number;
+  amountMad: number;
+  currency: "MAD";
+  methodId: string;
+  methodSnapshot: PaymentMethodSnapshot;
+  paymentReference: string;
+  referenceExpiresAt: string;
+  customerTransferId?: string;
+  customerNote?: string;
+  status: PaymentStatus;
+  createdAt: string;
+  updatedAt: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
+  reviewNote?: string;
+}
+
 export interface WalletEntry {
   id: string;
   customerId: string;
@@ -142,6 +191,8 @@ export interface StoreSnapshot {
   customers: Customer[];
   orders: Order[];
   walletEntries: WalletEntry[];
+  paymentMethods: PaymentMethod[];
+  payments: PaymentRecord[];
 }
 
 export const statusLabels: Record<OrderStatus, string> = {
