@@ -1,10 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
 import { CheckCircle2, LogIn, Send } from "lucide-react";
-import type { DynamicField, Service } from "@/lib/types";
+import { formatMAD, type DynamicField, type Service } from "@/lib/types";
 import { firebaseServices } from "@/lib/firebase/client";
 import { clearRequestDraft, loadRequestDraft, saveRequestDraft } from "@/lib/request-draft";
 
@@ -107,6 +108,6 @@ export function RequestForm({ service }: { service: Service }) {
       </label>
     ))}
     {error && <p className="form-error" role="alert">{error}</p>}
-    {submitted ? <div className="success-note"><CheckCircle2 size={18}/><div><b>تم إنشاء طلبك بنجاح.</b><span>رقم الطلب: {orderId} — افتح «حسابي» لمتابعته.</span></div></div> : <><button className="primary-button" type="submit" disabled={submitting}>{isAuthenticated ? <Send size={17}/> : <LogIn size={17}/>}{submitting ? "جارٍ إنشاء الطلب..." : isAuthenticated ? "إنشاء الطلب" : "سجّل الدخول لإرسال الطلب"}</button>{!isAuthenticated && <p className="muted-text request-login-note">سنحفظ ما أدخلته في هذا التبويب لمدة ساعة، ثم نعيده إليك بعد تسجيل الدخول.</p>}</>}
+    {submitted ? <div className="request-success" role="status"><CheckCircle2 size={20}/><div><b>تم إنشاء طلبك بنجاح.</b><span>رقم الطلب: {orderId}</span><p>ستظهر المرحلة التالية وأي تسليم داخل حسابك.</p><Link href="/account">فتح طلباتي <span aria-hidden="true">←</span></Link></div></div> : <><div className="request-submit-summary"><span>السعر المعتمد عند إنشاء الطلب</span><strong>{formatMAD(service.priceMad)}</strong><small>ستتابع حالة المعالجة والتسليم من حسابك.</small></div><button className="primary-button" type="submit" disabled={submitting}>{isAuthenticated ? <Send size={17}/> : <LogIn size={17}/>}{submitting ? "جارٍ إنشاء الطلب..." : isAuthenticated ? "إنشاء الطلب" : "سجّل الدخول لإرسال الطلب"}</button>{!isAuthenticated && <p className="muted-text request-login-note">سنحفظ ما أدخلته في هذا التبويب لمدة ساعة، ثم نعيده إليك بعد تسجيل الدخول.</p>}</>}
   </form>;
 }

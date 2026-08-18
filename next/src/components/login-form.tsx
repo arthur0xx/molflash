@@ -38,6 +38,7 @@ export function LoginForm() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
+  const [actionNotice, setActionNotice] = useState("");
   const [resetMessage, setResetMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submittingGoogle, setSubmittingGoogle] = useState(false);
@@ -79,6 +80,7 @@ export function LoginForm() {
     setMode(nextMode);
     setError("");
     setResetMessage("");
+    setActionNotice(nextMode === "signup" ? "أنشئ حسابك ثم أكّد بريدك قبل إرسال طلبك الأول." : nextMode === "reset" ? "أدخل بريد الحساب لنرسل رابط الاستعادة الآمن." : "استخدم بريد الحساب أو Google للمتابعة.");
   }
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
@@ -101,6 +103,7 @@ export function LoginForm() {
   async function submitGoogle() {
     setSubmittingGoogle(true);
     setError("");
+    setActionNotice("جارٍ فتح Google لإكمال الدخول الآمن...");
     const result = await signInWithGoogle();
     setSubmittingGoogle(false);
     if (result.status === "redirecting") return;
@@ -202,14 +205,16 @@ export function LoginForm() {
           <p>{content.intro}</p>
         </div>
 
-        <div className="auth-mode-switch" role="tablist" aria-label="اختيار إجراء الحساب">
-          <button className={mode === "signin" ? "active" : ""} type="button" role="tab" aria-selected={mode === "signin"} onClick={() => setActiveMode("signin")}>دخول</button>
-          <button className={mode === "signup" ? "active" : ""} type="button" role="tab" aria-selected={mode === "signup"} onClick={() => setActiveMode("signup")}>حساب جديد</button>
-        </div>
+                  <div className="auth-mode-switch" role="tablist" aria-label="اختيار إجراء الحساب">
+            <button id="signin-tab" className={mode === "signin" ? "active" : ""} type="button" role="tab" aria-selected={mode === "signin"} aria-controls="auth-form-panel" onClick={() => setActiveMode("signin")}>دخول</button>
+            <button id="signup-tab" className={mode === "signup" ? "active" : ""} type="button" role="tab" aria-selected={mode === "signup"} aria-controls="auth-form-panel" onClick={() => setActiveMode("signup")}>حساب جديد</button>
+          </div>
+          {actionNotice && <p className="auth-action-notice" role="status">{actionNotice}</p>}
+
         {mode === "signup" && <aside className="auth-signup-flow" aria-label="مراحل استخدام الحساب الجديد"><span><b>1</b> أنشئ الحساب</span><i aria-hidden="true"/><span><b>2</b> أكّد البريد</span><i aria-hidden="true"/><span><b>3</b> اطلب وتابع</span></aside>}
 
         {mode === "signin" && <>
-          <form className="auth-form" onSubmit={submit}>
+          <form id="auth-form-panel" className="auth-form" role="tabpanel" aria-labelledby="signin-tab" onSubmit={submit}>
             <label><span>البريد الإلكتروني</span><div className="auth-field"><Mail size={18} aria-hidden="true" /><input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="name@example.com" type="email" autoComplete="username" required /></div></label>
             <label><span>كلمة المرور</span><div className="auth-field"><LockKeyhole size={18} aria-hidden="true" /><input value={password} onChange={(event) => setPassword(event.target.value)} placeholder="أدخل كلمة المرور" type="password" autoComplete="current-password" required /></div></label>
             {error && <p className="form-error" role="alert">{error}</p>}
@@ -221,7 +226,7 @@ export function LoginForm() {
           <button className="auth-text-action" type="button" onClick={() => setActiveMode("reset")}>نسيت كلمة المرور؟</button>
         </>}
 
-        {mode === "signup" && <form className="auth-form" onSubmit={submitSignup}>
+        {mode === "signup" && <form id="auth-form-panel" className="auth-form" role="tabpanel" aria-labelledby="signup-tab" onSubmit={submitSignup}>
           <label><span>الاسم الكامل</span><div className="auth-field"><UserRound size={18} aria-hidden="true" /><input value={fullName} onChange={(event) => setFullName(event.target.value)} placeholder="الاسم الذي سيظهر في حسابك" type="text" autoComplete="name" minLength={2} maxLength={80} required /></div></label>
           <label><span>رقم الهاتف <small>اختياري</small></span><div className="auth-field"><Phone size={18} aria-hidden="true" /><input value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="06XXXXXXXX" type="tel" autoComplete="tel" maxLength={32} /></div></label>
           <label><span>البريد الإلكتروني</span><div className="auth-field"><Mail size={18} aria-hidden="true" /><input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="name@example.com" type="email" autoComplete="email" required /></div></label>
