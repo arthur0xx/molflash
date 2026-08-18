@@ -22,10 +22,12 @@ export async function GET(request: NextRequest) {
   if (!db) return NextResponse.json({ error: "خدمة الدفع غير متاحة حاليًا" }, { status: 503 });
 
   try {
-    const snapshot = await db.collection("paymentMethods").where("status", "==", "active").orderBy("sortOrder", "asc").get();
+    // تجنب فهرس Firestore مركب غير ضروري: العدد صغير والترتيب يتم بعد قراءة الوسائل المفعلة فقط.
+    const snapshot = await db.collection("paymentMethods").where("status", "==", "active").get();
     const methods = snapshot.docs
       .map((document) => ({ id: document.id, ...document.data() } as PaymentMethod))
       .filter((method) => method.type !== "electronic_gateway")
+      .sort((left, right) => left.sortOrder - right.sortOrder)
       .map((method) => ({ id: method.id, title: method.title, type: method.type, scope: method.scope }));
     return NextResponse.json({ methods });
   } catch (error) {
