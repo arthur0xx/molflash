@@ -75,3 +75,7 @@
 [1]: https://www.cashplus.ma/services-professionnels/cash-plus-payment "Cash Plus Payment — صفحة مهنية رسمية"
 [2]: https://www.cmi.co.ma/fr/solutions-paiement-ecommerce "CMI — الدفع للتجارة الإلكترونية"
 [3]: https://payzone.ma/payzone-e-com/ "Payzone E-Com — صفحة رسمية"
+
+## التحقق من المعاينة
+
+تم التحقق من معاينة الالتزام `8998ed3` بعد النشر: الصفحة العامة تستجيب وتعرض الكتالوج، ومسار `/admin` يعيد واجهة وصول محمية ويطلب حساب مدير بدل عرض بيانات CMC لزائر غير مسجل. لم تُختبر حقول CMC الحية من المتصفح لغياب جلسة مدير نشطة في هذه المعاينة، لكن اجتاز التطبيق بناء الإنتاج وفحص TypeScript وقواعد Firestore.
