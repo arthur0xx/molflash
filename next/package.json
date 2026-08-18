@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "emulators": "npx firebase-tools emulators:start --only auth,firestore,storage",
-    "test:firestore-rules": "npx firebase-tools emulators:exec --only firestore 'tsx src/scripts/test-firestore-rules.ts'"
+    "test:firestore-rules": "npx firebase-tools emulators:exec --only firestore 'tsx src/scripts/test-firestore-rules.ts'",
+    "check:release": "tsx src/scripts/check-release.ts"
   },
   "dependencies": {
     "firebase": "^12.17.1",

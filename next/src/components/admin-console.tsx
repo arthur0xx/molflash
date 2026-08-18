@@ -81,11 +81,11 @@ function normalizeDynamicFields(fields: DynamicField[]): DynamicField[] {
 
 export function AdminConsole() {
   const [data, setData] = useState<StoreSnapshot>(() => emptySnapshot());
-  const [tab, setTab] = useState<Tab>("overview");
-  const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
   const [session] = useState(() => typeof window === "undefined" ? null : getAuthSession());
   const isManager = session?.role === "manager";
   const managerPermissions = session?.managerPermissions || { orders: false, support: false, catalog: false };
+  const [tab, setTab] = useState<Tab>(() => isManager && !managerPermissions.orders && managerPermissions.catalog ? "products" : isManager && !managerPermissions.orders && managerPermissions.support ? "support" : "overview");
+  const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
   const [openFolder, setOpenFolder] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [typedName, setTypedName] = useState("");
@@ -216,16 +216,6 @@ export function AdminConsole() {
   const mobilePrimaryNav = navItems.filter(([id]) => ["overview", "orders", "products", "customers"].includes(id));
   const mobileMoreNav = navItems.filter(([id]) => !["overview", "orders", "products", "customers"].includes(id));
   const tabTitles: Record<Tab, string> = { overview: "نظرة عامة CMC", orders: "إدارة الطلبات", products: "مجلدات المنتجات", categories: "إدارة التصنيفات", customers: "العملاء والمحافظ", support: "رسائل الدعم", team: "إدارة الفريق", payments: "مركز الدفع", settings: "إعدادات المتجر" };
-
-  useEffect(() => {
-    if (!isManager) return;
-    const allowedTabs: Tab[] = [
-      ...(managerPermissions.catalog ? ["products", "categories"] as Tab[] : []),
-      ...(managerPermissions.orders ? ["overview", "orders"] as Tab[] : []),
-      ...(managerPermissions.support ? ["support"] as Tab[] : []),
-    ];
-    if (allowedTabs.length && !allowedTabs.includes(tab)) setTab(allowedTabs[0]);
-  }, [isManager, managerPermissions.catalog, managerPermissions.orders, managerPermissions.support, tab]);
 
   async function adminRequest<T>(path: string, method: "GET" | "POST" | "PATCH" | "DELETE", body?: unknown): Promise<T> {
     const user = firebase?.auth.currentUser;
