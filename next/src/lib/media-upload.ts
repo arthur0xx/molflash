@@ -51,7 +51,7 @@ export async function uploadSignedMediaImage(file: File, signed: SignedMediaUplo
     form.append("signature", signed.signature);
     form.append("folder", signed.folder);
     form.append("public_id", signed.publicId);
-    if (signed.deliveryType === "authenticated") form.append("type", "authenticated");
+    if (signed.deliveryType) form.append("type", signed.deliveryType);
     form.append("overwrite", String(signed.overwrite));
     form.append("invalidate", String(signed.invalidate));
 
