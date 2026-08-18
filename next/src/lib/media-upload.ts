@@ -3,6 +3,7 @@ export type SignedMediaUpload = {
   apiKey: string;
   folder: string;
   publicId: string;
+  deliveryType?: "upload" | "authenticated";
   timestamp: number;
   signature: string;
   overwrite: boolean;
@@ -36,7 +37,7 @@ export async function requestSignedMediaUpload(token: string, path: string, body
   return result as SignedMediaUpload;
 }
 
-export async function uploadSignedMediaImage(file: File, signed: SignedMediaUpload, expectedPrefix: "chrigsm/catalog/" | "chrigsm/profiles/", label: string): Promise<UploadedMediaAsset> {
+export async function uploadSignedMediaImage(file: File, signed: SignedMediaUpload, expectedPrefix: "chrigsm/catalog/" | "chrigsm/profiles/" | "chrigsm/payment-proofs/", label: string): Promise<UploadedMediaAsset> {
   const validationError = validateMediaImage(file);
   if (validationError) throw new Error(validationError);
 
@@ -50,6 +51,7 @@ export async function uploadSignedMediaImage(file: File, signed: SignedMediaUplo
     form.append("signature", signed.signature);
     form.append("folder", signed.folder);
     form.append("public_id", signed.publicId);
+    if (signed.deliveryType === "authenticated") form.append("type", "authenticated");
     form.append("overwrite", String(signed.overwrite));
     form.append("invalidate", String(signed.invalidate));
 

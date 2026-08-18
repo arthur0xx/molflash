@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
 import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore";
-import { Banknote, BellRing, CheckCircle2, ChevronDown, ClipboardList, Copy, KeyRound, Landmark, LogOut, MailCheck, MessageCircle, Settings2, ShieldCheck, Smartphone, UserRound, WalletCards } from "lucide-react";
+import { Banknote, BellRing, CheckCircle2, ChevronDown, ClipboardList, Copy, ImageUp, KeyRound, Landmark, LogOut, MailCheck, MessageCircle, Settings2, ShieldCheck, Smartphone, UserRound, WalletCards } from "lucide-react";
 import { formatMAD, statusLabels, type OrderNotification, type OrderStatus, type PaymentRecord, type SupportTicket } from "@/lib/types";
 import { firebaseServices } from "@/lib/firebase/client";
 import { completeGoogleLinkRedirect, linkGoogleToCurrentUser, requestPasswordReset, signOut } from "@/lib/auth";
@@ -74,6 +74,8 @@ export function AccountConsole() {
   const [topUpSaving, setTopUpSaving] = useState(false);
   const [topUpError, setTopUpError] = useState("");
   const [createdTopUp, setCreatedTopUp] = useState<CreatedPayment | null>(null);
+  const [proofUploadingPaymentId, setProofUploadingPaymentId] = useState("");
+  const [proofUploadError, setProofUploadError] = useState("");
 
   function showNotice(message: string, tone: "success" | "info" = "success") {
     setNotice({ id: Date.now(), tone, message });
@@ -141,7 +143,7 @@ export function AccountConsole() {
   }, []);
 
   const unreadNotifications = orders.filter((order) => order.status === "completed" && order.notification);
-  const pendingPayments = payments.filter((payment) => payment.status === "manual_transfer_pending" || payment.status === "under_review");
+  const pendingPayments = payments.filter((payment) => payment.status === "manual_transfer_pending" || payment.status === "proof_submitted" || payment.status === "under_review");
 
   async function loadWalletTopUpMethods() {
     const user = firebase?.auth.currentUser;
@@ -189,6 +191,28 @@ export function AccountConsole() {
   async function copyPaymentReference(reference: string) {
     try { await navigator.clipboard.writeText(reference); showNotice("تم نسخ مرجع التحويل.", "info"); }
     catch { showNotice("تعذر النسخ تلقائيًا؛ انسخ المرجع يدويًا.", "info"); }
+  }
+
+  async function uploadPaymentProof(payment: PaymentRecord, file: File) {
+    const user = firebase?.auth.currentUser;
+    if (!user) { setProofUploadError("سجّل الدخول أولًا لإرفاق إثبات التحويل."); return; }
+    try {
+      setProofUploadingPaymentId(payment.id); setProofUploadError("");
+      const token = await user.getIdToken();
+      const signed = await requestSignedMediaUpload(token, `/api/payments/${encodeURIComponent(payment.id)}/proof`);
+      const asset = await uploadSignedMediaImage(file, signed, "chrigsm/payment-proofs/", "رفع إثبات التحويل");
+      const response = await fetch(`/api/payments/${encodeURIComponent(payment.id)}/proof`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ publicId: asset.imagePublicId }),
+      });
+      const result = await response.json().catch(() => ({})) as { payment?: PaymentRecord; error?: string };
+      if (!response.ok || !result.payment) throw new Error(result.error || "تعذر حفظ إثبات التحويل.");
+      setPayments((previous) => previous.map((current) => current.id === result.payment!.id ? result.payment! : current));
+      setCreatedTopUp((previous) => previous?.payment.id === result.payment!.id ? { ...previous, payment: result.payment! } : previous);
+      showNotice("تم إرسال إثبات التحويل. ستراجع العملية يدويًا قبل شحن الرصيد أو بدء معالجة الطلب.", "info");
+    } catch (reason) { setProofUploadError(reason instanceof Error ? reason.message : "تعذر رفع إثبات التحويل."); }
+    finally { setProofUploadingPaymentId(""); }
   }
 
   async function submitProfile(event: FormEvent<HTMLFormElement>) {
@@ -329,7 +353,7 @@ export function AccountConsole() {
     <CustomerOnboarding customerId={customer.id} firstName={customer.fullName.split(" ")[0] || "بك"} hasOrders={orders.length > 0}/>
     <WalletTopUpPanel open={showWalletTopUp} loadingMethods={topUpLoading} saving={topUpSaving} amount={topUpAmount} methods={topUpMethods} selectedMethodId={selectedTopUpMethodId} createdPayment={createdTopUp} error={topUpError} onToggle={() => { void openWalletTopUp(); }} onAmountChange={setTopUpAmount} onSelectMethod={setSelectedTopUpMethodId} onCreate={() => { void createWalletTopUp(); }} onCopy={copyPaymentReference}/>
     {pendingPayments.length > 0 && (
-      <PendingPayments payments={pendingPayments} onCopy={copyPaymentReference}/>
+      <PendingPayments payments={pendingPayments} uploadingPaymentId={proofUploadingPaymentId} uploadError={proofUploadError} onCopy={copyPaymentReference} onUpload={uploadPaymentProof}/>
     )}
     {unreadNotifications.length > 0 && <section className="order-notification"><BellRing size={21}/><div><p>إشعار الطلب</p><b>{unreadNotifications[0].notification?.title}</b><span>{unreadNotifications[0].notification?.body}</span></div><span className="status-pill green">تم التسليم</span></section>}
     <section className="account-actions" aria-label="إجراءات الحساب"><button type="button" className={showSettings ? "active" : ""} aria-expanded={showSettings} aria-controls="account-settings-panel" onClick={() => { setShowSettings(!showSettings); setShowSupport(false); }}><Settings2 size={18}/><span>إعدادات الحساب</span><ChevronDown size={15}/></button><button type="button" className={showSupport ? "active" : ""} aria-expanded={showSupport} aria-controls="account-support-panel" onClick={() => { setShowSupport(!showSupport); setShowSettings(false); }}><MessageCircle size={18}/><span>الدعم الفني</span><ChevronDown size={15}/></button><button type="button" className="account-logout" onClick={handleSignOut}><LogOut size={18}/><span>تسجيل الخروج</span></button></section>
@@ -344,9 +368,9 @@ function WalletTopUpPanel({ open, loadingMethods, saving, amount, methods, selec
   return <section className={`wallet-topup-panel${open ? " open" : ""}`}><div className="wallet-topup-heading"><div><p className="eyebrow">رصيد ChriGsm</p><h2>شحن الرصيد</h2><p>أنشئ مرجعًا فريدًا للتحويل. لا يُضاف الرصيد إلا بعد التحقق اليدوي من المالك.</p></div><button type="button" className="outline-button" onClick={onToggle}>{open ? "إغلاق" : "شحن الرصيد"}</button></div>{open && <div className="wallet-topup-body">{createdPayment ? <div className="wallet-topup-created" role="status"><CheckCircle2 size={20}/><div><b>تم إنشاء مرجع شحن الرصيد.</b><p>حوّل {formatMAD(createdPayment.payment.amountMad)} واتبع التعليمات التالية ثم اكتب المرجع في سبب التحويل:</p><button type="button" className="payment-reference-copy" onClick={() => { void onCopy(createdPayment.payment.paymentReference); }}><code>{createdPayment.payment.paymentReference}</code><Copy size={15}/></button><pre>{createdPayment.instructions}</pre><small><ShieldCheck size={14}/> يضاف الرصيد فقط بعد المراجعة اليدوية.</small></div></div> : <>{loadingMethods ? <p className="muted-text">جارٍ تحميل وسائل شحن الرصيد...</p> : methods.length ? <><label className="wallet-topup-amount"><span>المبلغ بالدرهم المغربي</span><input type="number" inputMode="decimal" min="1" max="1000000" step="0.01" value={amount} onChange={(event) => onAmountChange(event.target.value)} placeholder="مثال: 100" disabled={saving}/></label><fieldset className="payment-method-options"><legend>وسيلة التحويل</legend>{methods.map((method) => <label key={method.id} className={`payment-method-option${selectedMethodId === method.id ? " selected" : ""}`}><input type="radio" name="walletPaymentMethod" checked={selectedMethodId === method.id} onChange={() => onSelectMethod(method.id)} disabled={saving}/>{method.type === "bank_transfer" ? <Landmark size={18}/> : <Banknote size={18}/>}<span><b>{method.title}</b><small>{method.type === "bank_transfer" ? "تحويل بنكي" : "تحويل نقدي"}</small></span></label>)}</fieldset><button type="button" className="primary-button" onClick={onCreate} disabled={saving || !selectedMethodId}>{saving ? "جارٍ إنشاء المرجع..." : "إنشاء مرجع التحويل"}</button></> : <p className="muted-text">لا توجد وسيلة شحن رصيد مفعلة حاليًا. تواصل مع الدعم للمساعدة.</p>}{error && <p className="form-error" role="alert">{error}</p>}</>}</div>}</section>;
 }
 
-function PendingPayments({ payments, onCopy }: { payments: PaymentRecord[]; onCopy: (reference: string) => Promise<void> }) {
-  const statusLabel: Record<PaymentRecord["status"], string> = { manual_transfer_pending: "بانتظار التحقق", under_review: "قيد المراجعة", confirmed: "مؤكد", rejected: "مرفوض", expired: "منتهي" };
-  return <section className="pending-payments"><div className="section-title"><div><p className="eyebrow">التحويلات المسجلة</p><h2>بانتظار مراجعة الدفع</h2></div><span className="muted-text">{payments.length} عملية</span></div><div className="pending-payment-list">{payments.map((payment) => <article key={payment.id}><div><span className={`status-pill ${payment.status === "under_review" ? "violet" : "amber"}`}>{statusLabel[payment.status]}</span><b>{formatMAD(payment.amountMad)}</b><p>{payment.purpose === "wallet_topup" ? "شحن رصيد" : `طلب رقم ${payment.orderId || "—"}`} · {payment.methodSnapshot.title}</p></div><button type="button" className="payment-reference-copy" onClick={() => { void onCopy(payment.paymentReference); }} aria-label="نسخ مرجع التحويل"><code>{payment.paymentReference}</code><Copy size={14}/></button></article>)}</div></section>;
+function PendingPayments({ payments, uploadingPaymentId, uploadError, onCopy, onUpload }: { payments: PaymentRecord[]; uploadingPaymentId: string; uploadError: string; onCopy: (reference: string) => Promise<void>; onUpload: (payment: PaymentRecord, file: File) => Promise<void> }) {
+  const statusLabel: Record<PaymentRecord["status"], string> = { manual_transfer_pending: "بانتظار إثبات التحويل", proof_submitted: "أُرسل الإثبات", under_review: "قيد المراجعة", confirmed: "مؤكد", rejected: "مرفوض", expired: "منتهي" };
+  return <section className="pending-payments"><div className="section-title"><div><p className="eyebrow">التحويلات المسجلة</p><h2>بانتظار مراجعة الدفع</h2></div><span className="muted-text">{payments.length} عملية</span></div><div className="pending-payment-list">{payments.map((payment) => <article key={payment.id}><div><span className={`status-pill ${payment.status === "under_review" ? "violet" : payment.status === "proof_submitted" ? "blue" : "amber"}`}>{statusLabel[payment.status]}</span><b>{formatMAD(payment.amountMad)}</b><p>{payment.purpose === "wallet_topup" ? "شحن رصيد" : `طلب رقم ${payment.orderId || "—"}`} · {payment.methodSnapshot.title}</p>{payment.status === "manual_transfer_pending" && <label className="payment-proof-upload"><ImageUp size={15}/><span>{uploadingPaymentId === payment.id ? "جارٍ رفع الإثبات..." : "إرفاق سكرين التحويل"}</span><input type="file" accept="image/png,image/jpeg,image/webp" disabled={Boolean(uploadingPaymentId)} onChange={(event) => { const file = event.currentTarget.files?.[0]; if (file) void onUpload(payment, file); event.currentTarget.value = ""; }}/></label>}{payment.status === "proof_submitted" && <small className="payment-proof-confirmed"><CheckCircle2 size={14}/> وصل الإثبات إلى المالك للمراجعة.</small>}</div><button type="button" className="payment-reference-copy" onClick={() => { void onCopy(payment.paymentReference); }} aria-label="نسخ مرجع التحويل"><code>{payment.paymentReference}</code><Copy size={14}/></button></article>)}</div>{uploadError && <p className="form-error" role="alert">{uploadError}</p>}</section>;
 }
 
 function AccountNotice({ notice, onDismiss }: { notice: AccountNotice; onDismiss: () => void }) {

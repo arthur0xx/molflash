@@ -4,10 +4,11 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
-import { CheckCircle2, Copy, Landmark, LogIn, Send, ShieldCheck } from "lucide-react";
+import { CheckCircle2, Copy, ImageUp, Landmark, LogIn, Send, ShieldCheck } from "lucide-react";
 import { formatMAD, type DynamicField, type PaymentRecord, type Service } from "@/lib/types";
 import { firebaseServices } from "@/lib/firebase/client";
 import { clearRequestDraft, loadRequestDraft, saveRequestDraft } from "@/lib/request-draft";
+import { requestSignedMediaUpload, uploadSignedMediaImage } from "@/lib/media-upload";
 
 const defaultEmailField: DynamicField = { id: "email", label: "البريد الإلكتروني لاستلام التفعيل", type: "email", required: true, placeholder: "name@example.com" };
 type AvailablePaymentMethod = { id: string; title: string; type: "cash_transfer" | "bank_transfer"; scope: "order" | "wallet_topup" | "both" };
@@ -40,6 +41,7 @@ export function RequestForm({ service }: { service: Service }) {
   const [paymentMethods, setPaymentMethods] = useState<AvailablePaymentMethod[]>([]);
   const [selectedMethodId, setSelectedMethodId] = useState("");
   const [createdPayment, setCreatedPayment] = useState<CreatedPayment | null>(null);
+  const [proofUploading, setProofUploading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -122,8 +124,29 @@ export function RequestForm({ service }: { service: Service }) {
     try { await navigator.clipboard.writeText(reference); } catch { setError("تعذر النسخ تلقائيًا. انسخ المرجع يدويًا."); }
   }
 
+  async function uploadProof(file: File) {
+    const payment = createdPayment?.payment;
+    const user = firebaseServices()?.auth.currentUser;
+    if (!payment || !user) { setError("انتهت جلسة الدخول. سجّل الدخول ثم أرفق إثبات التحويل من حسابك."); return; }
+    try {
+      setProofUploading(true); setError("");
+      const token = await user.getIdToken();
+      const signed = await requestSignedMediaUpload(token, `/api/payments/${encodeURIComponent(payment.id)}/proof`);
+      const asset = await uploadSignedMediaImage(file, signed, "chrigsm/payment-proofs/", "رفع إثبات التحويل");
+      const response = await fetch(`/api/payments/${encodeURIComponent(payment.id)}/proof`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ publicId: asset.imagePublicId }),
+      });
+      const payload = await response.json().catch(() => ({})) as { payment?: PaymentRecord; error?: string };
+      if (!response.ok || !payload.payment) throw new Error(payload.error || "تعذر حفظ إثبات التحويل.");
+      setCreatedPayment((current) => current ? { ...current, payment: payload.payment! } : current);
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "تعذر رفع إثبات التحويل."); }
+    finally { setProofUploading(false); }
+  }
+
   if (orderId) {
-    if (createdPayment) return <div className="request-payment-success" role="status"><CheckCircle2 size={22}/><div><b>أصبح طلبك بانتظار التحقق من التحويل.</b><p>حوّل المبلغ وفق التعليمات ثم اكتب المرجع التالي كما هو في سبب التحويل:</p><button type="button" className="payment-reference-copy" onClick={() => { void copyReference(createdPayment.payment.paymentReference); }} aria-label="نسخ مرجع التحويل"><code>{createdPayment.payment.paymentReference}</code><Copy size={15}/></button><pre>{createdPayment.instructions}</pre><small><ShieldCheck size={14}/> هذا المرجع لا يؤكد الدفع تلقائيًا؛ سيبدأ تنفيذ الطلب بعد المراجعة اليدوية.</small><Link href="/account">متابعة الطلب من حسابي <span aria-hidden="true">←</span></Link></div></div>;
+    if (createdPayment) return <div className="request-payment-success" role="status"><CheckCircle2 size={22}/><div><b>{createdPayment.payment.status === "proof_submitted" ? "وصل إثبات التحويل للمراجعة." : "أصبح طلبك بانتظار التحقق من التحويل."}</b><p>حوّل المبلغ وفق التعليمات ثم اكتب المرجع التالي كما هو في سبب التحويل:</p><button type="button" className="payment-reference-copy" onClick={() => { void copyReference(createdPayment.payment.paymentReference); }} aria-label="نسخ مرجع التحويل"><code>{createdPayment.payment.paymentReference}</code><Copy size={15}/></button><pre>{createdPayment.instructions}</pre>{createdPayment.payment.status === "manual_transfer_pending" && <label className="payment-proof-upload"><ImageUp size={16}/><span>{proofUploading ? "جارٍ رفع الإثبات..." : "إرفاق سكرين التحويل"}</span><input type="file" accept="image/png,image/jpeg,image/webp" disabled={proofUploading} onChange={(event) => { const file = event.currentTarget.files?.[0]; if (file) void uploadProof(file); event.currentTarget.value = ""; }}/></label>}{createdPayment.payment.status === "proof_submitted" && <small className="payment-proof-confirmed"><CheckCircle2 size={14}/> سيظهر الإثبات للمالك لمطابقته مع التحويل البنكي.</small>}<small><ShieldCheck size={14}/> لا يؤكد المرجع أو الصورة الدفع تلقائيًا؛ سيبدأ تنفيذ الطلب بعد المراجعة اليدوية.</small><Link href="/account">متابعة الطلب من حسابي <span aria-hidden="true">←</span></Link>{error && <p className="form-error" role="alert">{error}</p>}</div></div>;
     return <div className="request-payment-step"><div className="request-payment-head"><span className="request-step-index">2</span><div><p className="eyebrow">الخطوة الأخيرة</p><h3>اختر طريقة التحويل</h3><p>تم إنشاء الطلب <code>{orderId}</code>. اختر وسيلة مفعلة لتتلقى التعليمات والمرجع الفريد.</p></div></div>{loadingMethods ? <p className="muted-text">جارٍ تحميل وسائل الدفع المتاحة...</p> : paymentMethods.length ? <><fieldset className="payment-method-options"><legend>وسيلة الدفع</legend>{paymentMethods.map((method) => <label key={method.id} className={`payment-method-option${selectedMethodId === method.id ? " selected" : ""}`}><input type="radio" name="paymentMethod" checked={selectedMethodId === method.id} onChange={() => setSelectedMethodId(method.id)}/><Landmark size={18}/><span><b>{method.title}</b><small>{method.type === "bank_transfer" ? "تحويل بنكي" : "تحويل نقدي"}</small></span></label>)}</fieldset><button className="primary-button" type="button" onClick={() => { void createManualPayment(); }} disabled={creatingPayment || !selectedMethodId}>{creatingPayment ? "جارٍ إنشاء المرجع..." : "عرض تعليمات التحويل"}</button></> : <div className="request-payment-unavailable"><p>لا توجد وسيلة تحويل مفعلة حاليًا. احفظ رقم الطلب وتواصل مع الدعم لتأكيد طريقة الدفع.</p><Link href="/account">فتح طلباتي <span aria-hidden="true">←</span></Link></div>}<Link className="text-button" href="/account">سأكمل الدفع لاحقًا من حسابي <span aria-hidden="true">←</span></Link>{error && <p className="form-error" role="alert">{error}</p>}</div>;
   }
 

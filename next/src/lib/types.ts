@@ -3,7 +3,7 @@ export type OrderStatus = "new" | "processing" | "waiting" | "completed" | "reje
 export type PaymentMethodType = "cash_transfer" | "bank_transfer" | "electronic_gateway";
 export type PaymentMethodStatus = "draft" | "active" | "disabled";
 export type PaymentScope = "order" | "wallet_topup" | "both";
-export type PaymentStatus = "manual_transfer_pending" | "under_review" | "confirmed" | "rejected" | "expired";
+export type PaymentStatus = "manual_transfer_pending" | "proof_submitted" | "under_review" | "confirmed" | "rejected" | "expired";
 export type PaymentPurpose = "order" | "wallet_topup";
 
 export interface Category {
@@ -135,6 +135,14 @@ export interface PaymentMethodSnapshot {
   instructions: string;
 }
 
+export interface PaymentProof {
+  /** Cloudinary authenticated asset identifier. A delivery URL is generated only by an authorized server route. */
+  publicId: string;
+  format: "png" | "jpg" | "jpeg" | "webp";
+  sizeBytes: number;
+  submittedAt: string;
+}
+
 export interface PaymentRecord {
   id: string;
   customerId: string;
@@ -149,12 +157,16 @@ export interface PaymentRecord {
   referenceExpiresAt: string;
   customerTransferId?: string;
   customerNote?: string;
+  /** Transfer evidence stored as a restricted Cloudinary asset; no public URL is persisted. */
+  proof?: PaymentProof;
   status: PaymentStatus;
   createdAt: string;
   updatedAt: string;
   reviewedAt?: string;
   reviewedBy?: string;
   reviewNote?: string;
+  /** Owner-only note recorded while matching the bank transaction with this payment reference. */
+  reconciliationNote?: string;
 }
 
 export interface WalletEntry {

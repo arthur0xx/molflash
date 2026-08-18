@@ -7,9 +7,10 @@ import type { Customer, PaymentRecord, WalletEntry } from "@/lib/types";
 const reviewSchema = z.object({
   action: z.enum(["under_review", "confirm", "reject"]),
   note: z.string().trim().max(500, "ملاحظة المراجعة طويلة جدًا").optional(),
+  reconciliationNote: z.string().trim().max(500, "ملاحظة المطابقة البنكية طويلة جدًا").optional(),
 });
 
-const reviewableStatuses = new Set<PaymentRecord["status"]>(["manual_transfer_pending", "under_review"]);
+const reviewableStatuses = new Set<PaymentRecord["status"]>(["manual_transfer_pending", "proof_submitted", "under_review"]);
 
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const owner = await requireOwner(request);
@@ -35,8 +36,9 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       if (!reviewableStatuses.has(payment.status)) throw new PaymentReviewError("تمت مراجعة هذه العملية سابقًا ولا يمكن تعديلها مرة أخرى", 409);
 
       if (parsed.data.action === "under_review") {
-        const next = { ...payment, status: "under_review" as const, updatedAt: now, reviewNote: parsed.data.note || payment.reviewNote || "قيد مراجعة التحويل" };
-        transaction.update(paymentReference, { status: next.status, updatedAt: next.updatedAt, reviewNote: next.reviewNote });
+        if (!payment.proof) throw new PaymentReviewError("لا يمكن بدء المراجعة قبل أن يرفق العميل إثبات التحويل", 409);
+        const next = { ...payment, status: "under_review" as const, updatedAt: now, reviewNote: parsed.data.note || payment.reviewNote || "قيد مراجعة التحويل", reconciliationNote: parsed.data.reconciliationNote || payment.reconciliationNote };
+        transaction.update(paymentReference, { status: next.status, updatedAt: next.updatedAt, reviewNote: next.reviewNote, reconciliationNote: next.reconciliationNote || null });
         transaction.create(db.collection("auditLogs").doc(), { action: "manual_payment_under_review", paymentId: payment.id, paymentReference: payment.paymentReference, actorUid: owner.uid, at: now });
         return { payment: next, creditedWallet: false };
       }
@@ -48,6 +50,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
         return { payment: next, creditedWallet: false };
       }
 
+      if (!payment.proof) throw new PaymentReviewError("لا يمكن تأكيد الدفع قبل أن يرفق العميل إثبات التحويل", 409);
       if (new Date(payment.referenceExpiresAt).getTime() < Date.now()) throw new PaymentReviewError("انتهت صلاحية مرجع التحويل؛ راجع العملية يدويًا أو أنشئ مرجعًا جديدًا", 409);
 
       if (payment.purpose === "order") {
@@ -78,8 +81,8 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
         transaction.create(walletEntryReference, walletEntry);
       }
 
-      const next = { ...payment, status: "confirmed" as const, updatedAt: now, reviewedAt: now, reviewedBy: owner.uid, reviewNote: parsed.data.note || "تم تأكيد التحويل اليدوي" };
-      transaction.update(paymentReference, { status: next.status, updatedAt: next.updatedAt, reviewedAt: next.reviewedAt, reviewedBy: next.reviewedBy, reviewNote: next.reviewNote });
+      const next = { ...payment, status: "confirmed" as const, updatedAt: now, reviewedAt: now, reviewedBy: owner.uid, reviewNote: parsed.data.note || "تم تأكيد التحويل اليدوي", reconciliationNote: parsed.data.reconciliationNote || payment.reconciliationNote };
+      transaction.update(paymentReference, { status: next.status, updatedAt: next.updatedAt, reviewedAt: next.reviewedAt, reviewedBy: next.reviewedBy, reviewNote: next.reviewNote, reconciliationNote: next.reconciliationNote || null });
       transaction.create(db.collection("auditLogs").doc(), { action: "manual_payment_confirmed", paymentId: payment.id, paymentReference: payment.paymentReference, purpose: payment.purpose, amountMad: payment.amountMad, customerId: payment.customerId, actorUid: owner.uid, at: now });
       return { payment: next, creditedWallet: payment.purpose === "wallet_topup" };
     });

@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 const serviceFolder = "chrigsm/catalog";
 const legacyServiceFolder = "chrigsm/services";
 const profileFolder = "chrigsm/profiles";
+const paymentProofFolder = "chrigsm/payment-proofs";
 
 export type CloudinaryServerConfig = {
   cloudName: string;
@@ -10,7 +11,8 @@ export type CloudinaryServerConfig = {
   apiSecret: string;
 };
 
-export type MediaKind = "service" | "profile";
+export type MediaKind = "service" | "profile" | "payment_proof";
+type CloudinaryDeliveryType = "upload" | "authenticated";
 
 export type CloudinaryUploadTarget = {
   kind: MediaKind;
@@ -37,10 +39,19 @@ export function profileImagePublicId(fullName: string, userId: string) {
   return `${profileFolder}/${safeAssetSegment(fullName, "customer")}-${safeAssetSegment(userId, "account")}`;
 }
 
+export function paymentProofPublicId(paymentReference: string) {
+  return `${paymentProofFolder}/${safeAssetSegment(paymentReference, "payment")}/receipt`;
+}
+
+function cloudinaryDeliveryType(kind: MediaKind): CloudinaryDeliveryType {
+  return kind === "payment_proof" ? "authenticated" : "upload";
+}
+
 function isManagedPublicId(publicId: string, kind?: MediaKind) {
   const isServiceAsset = publicId.startsWith(`${serviceFolder}/`) || publicId.startsWith(`${legacyServiceFolder}/`);
   const isProfileAsset = publicId.startsWith(`${profileFolder}/`);
-  const permitted = kind === "service" ? isServiceAsset : kind === "profile" ? isProfileAsset : publicId.startsWith("chrigsm/");
+  const isPaymentProofAsset = publicId.startsWith(`${paymentProofFolder}/`);
+  const permitted = kind === "service" ? isServiceAsset : kind === "profile" ? isProfileAsset : kind === "payment_proof" ? isPaymentProofAsset : publicId.startsWith("chrigsm/");
   return permitted && /^[a-z0-9/_-]{5,220}$/.test(publicId);
 }
 
@@ -79,6 +90,7 @@ export function createCloudinaryUploadSignature(target: CloudinaryUploadTarget, 
     overwrite: "true",
     public_id: assetName,
     timestamp,
+    type: cloudinaryDeliveryType(target.kind),
   };
 
   return {
@@ -86,11 +98,44 @@ export function createCloudinaryUploadSignature(target: CloudinaryUploadTarget, 
     apiKey: config.apiKey,
     folder,
     publicId: parameters.public_id,
+    deliveryType: parameters.type,
     overwrite: true,
     invalidate: true,
     timestamp,
     signature: cloudinarySignature(parameters, config.apiSecret),
   };
+}
+
+export function authenticatedImageDeliveryUrl(publicId: string, format: "png" | "jpg" | "jpeg" | "webp") {
+  const config = getCloudinaryServerConfig();
+  if (!config || !isManagedPublicId(publicId, "payment_proof")) return null;
+  const signedPath = `${publicId}.${format}`;
+  const signature = createHash("sha1")
+    .update(`${signedPath}${config.apiSecret}`)
+    .digest("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "")
+    .slice(0, 8);
+  return `https://res.cloudinary.com/${config.cloudName}/image/authenticated/s--${signature}--/${signedPath}`;
+}
+
+export async function readCloudinaryAuthenticatedImageMetadata(publicId: string) {
+  const config = getCloudinaryServerConfig();
+  if (!config || !isManagedPublicId(publicId, "payment_proof")) return null;
+
+  const credentials = Buffer.from(`${config.apiKey}:${config.apiSecret}`).toString("base64");
+  const response = await fetch(`https://api.cloudinary.com/v1_1/${config.cloudName}/resources/image/authenticated/${encodeURIComponent(publicId)}`, {
+    headers: { Authorization: `Basic ${credentials}` },
+    cache: "no-store",
+  });
+  if (!response.ok) return null;
+
+  const asset = await response.json().catch(() => ({})) as { public_id?: unknown; format?: unknown; bytes?: unknown };
+  const format = typeof asset.format === "string" ? asset.format.toLowerCase() : "";
+  const sizeBytes = typeof asset.bytes === "number" ? asset.bytes : 0;
+  if (asset.public_id !== publicId || !["png", "jpg", "jpeg", "webp"].includes(format) || !Number.isInteger(sizeBytes) || sizeBytes < 1 || sizeBytes > 10 * 1024 * 1024) return null;
+  return { publicId, format: format as "png" | "jpg" | "jpeg" | "webp", sizeBytes };
 }
 
 export async function deleteCloudinaryImage(publicId: string, kind?: MediaKind) {
