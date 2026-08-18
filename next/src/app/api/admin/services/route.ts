@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { adminDb } from "@/lib/firebase/admin";
-import { requireAdmin } from "@/lib/api/admin-auth";
+import { requireStaff } from "@/lib/api/admin-auth";
 
 const dynamicFieldSchema = z.object({
   id: z.string().trim().regex(/^[a-z0-9-]{2,50}$/i, "معرف الحقل غير صحيح"),
@@ -44,7 +44,7 @@ const serviceSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
-  const admin = await requireAdmin(request);
+  const admin = await requireStaff(request, "catalog");
   if (!admin) return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
 
   const db = adminDb();
@@ -53,6 +53,7 @@ export async function POST(request: NextRequest) {
   try {
     const parsed = serviceSchema.safeParse(await request.json());
     if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message || "بيانات الخدمة غير صحيحة" }, { status: 400 });
+    if (admin.role === "manager" && (parsed.data.priceMad !== 0 || parsed.data.isActive || parsed.data.promoteInCatalog || parsed.data.compareAtPriceMad !== undefined)) return NextResponse.json({ error: "مدير الكتالوج ينشئ مسودات بلا سعر أو تفعيل؛ يراجع المالك النشر والأسعار." }, { status: 403 });
 
     const [category, existingSlug] = await Promise.all([
       db.collection("categories").doc(parsed.data.categoryId).get(),

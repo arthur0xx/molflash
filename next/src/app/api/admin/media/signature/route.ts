@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { requireAdmin } from "@/lib/api/admin-auth";
+import { requireStaff } from "@/lib/api/admin-auth";
 import { adminDb } from "@/lib/firebase/admin";
 import { cloudinaryUploadStatus, createCloudinaryUploadSignature, serviceImagePublicId } from "@/lib/cloudinary";
 
@@ -10,13 +10,13 @@ const requestSchema = z.object({
 });
 
 export async function GET(request: NextRequest) {
-  const admin = await requireAdmin(request);
+  const admin = await requireStaff(request, "catalog");
   if (!admin) return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
   return NextResponse.json(cloudinaryUploadStatus());
 }
 
 export async function POST(request: NextRequest) {
-  const admin = await requireAdmin(request);
+  const admin = await requireStaff(request, "catalog");
   if (!admin) return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
 
   const parsed = requestSchema.safeParse(await request.json());

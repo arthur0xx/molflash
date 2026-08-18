@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { adminDb } from "@/lib/firebase/admin";
-import { requireAdmin } from "@/lib/api/admin-auth";
+import { requireOwner, requireStaff } from "@/lib/api/admin-auth";
 
 const updateCategorySchema = z.object({
   name: z.string().trim().min(2, "اسم التصنيف قصير جدًا").max(80, "اسم التصنيف طويل جدًا").optional(),
@@ -17,7 +17,7 @@ function categoryReferenceId(params: { id: string }) {
 }
 
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  const admin = await requireAdmin(request);
+  const admin = await requireStaff(request, "catalog");
   if (!admin) return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
 
   const db = adminDb();
@@ -32,6 +32,8 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error.issues[0]?.message || "بيانات التصنيف غير صحيحة" }, { status: 400 });
     }
+
+    if (admin.role === "manager" && Object.prototype.hasOwnProperty.call(parsed.data, "isActive")) return NextResponse.json({ error: "إتاحة التصنيف للعملاء يراجعها المالك فقط." }, { status: 403 });
 
     const reference = db.collection("categories").doc(categoryId);
     const snapshot = await reference.get();
@@ -55,7 +57,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 }
 
 export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  const admin = await requireAdmin(request);
+  const admin = await requireOwner(request);
   if (!admin) return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
 
   const db = adminDb();

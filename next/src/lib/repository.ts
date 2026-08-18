@@ -65,6 +65,27 @@ export async function getSnapshot(): Promise<StoreSnapshot> {
  * Returns only the order-related records a limited manager needs to process orders.
  * Wallet entries and customers without an assigned order are intentionally omitted.
  */
+/** Returns catalogue records only for a manager with the signed catalog permission. */
+export async function getCatalogStaffSnapshot(): Promise<StoreSnapshot> {
+  const db = adminDb();
+  if (!db) return emptyStoreSnapshot();
+
+  const [categories, services] = await Promise.all([
+    db.collection("categories").orderBy("order").get(),
+    db.collection("services").orderBy("title").get(),
+  ]);
+
+  return {
+    categories: categories.docs.map((document) => ({ id: document.id, ...document.data() })) as StoreSnapshot["categories"],
+    services: services.docs.map((document) => ({ id: document.id, ...document.data() })) as StoreSnapshot["services"],
+    customers: [],
+    orders: [],
+    walletEntries: [],
+    paymentMethods: [],
+    payments: [],
+  };
+}
+
 export async function getOrderStaffSnapshot(): Promise<StoreSnapshot> {
   const db = adminDb();
   if (!db) return emptyStoreSnapshot();

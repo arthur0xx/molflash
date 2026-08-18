@@ -10,8 +10,9 @@ const createManagerSchema = z.object({
   phone: z.string().trim().max(30).default(""),
   temporaryPassword: z.string().min(8).max(128),
   orders: z.boolean().default(true),
-  support: z.boolean().default(true),
-});
+  support: z.boolean().default(false),
+  catalog: z.boolean().default(false),
+}).refine((value) => Number(value.orders) + Number(value.support) + Number(value.catalog) === 1, "اختر صلاحية فريق واحدة فقط لكل مشرف.");
 const updateManagerSchema = z.object({ uid: z.string().trim().min(1), disabled: z.boolean() });
 
 function serializeManager(uid: string, raw: Record<string, unknown>): Customer {
@@ -25,7 +26,7 @@ function serializeManager(uid: string, raw: Record<string, unknown>): Customer {
     lastActivity: String(raw.lastActivity || ""),
     whatsappEnabled: raw.whatsappEnabled === true,
     role: "manager",
-    managerPermissions: raw.managerPermissions && typeof raw.managerPermissions === "object" ? raw.managerPermissions as Customer["managerPermissions"] : { orders: true, support: true },
+    managerPermissions: raw.managerPermissions && typeof raw.managerPermissions === "object" ? raw.managerPermissions as Customer["managerPermissions"] : { orders: true, support: false, catalog: false },
     accountStatus: raw.accountStatus === "blocked" ? "blocked" : "active",
   };
 }
@@ -48,13 +49,14 @@ export async function POST(request: NextRequest) {
   const parsed = createManagerSchema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message || "بيانات المشرف غير صحيحة" }, { status: 400 });
   try {
-    const { fullName, email, phone, temporaryPassword, orders, support } = parsed.data;
+    const { fullName, email, phone, temporaryPassword, orders, support, catalog } = parsed.data;
+    const managerPermissions = { orders, support, catalog };
     const user = await auth.createUser({ email, password: temporaryPassword, displayName: fullName, disabled: false, emailVerified: false });
-    await auth.setCustomUserClaims(user.uid, { role: "manager", managerPermissions: { orders, support } });
+    await auth.setCustomUserClaims(user.uid, { role: "manager", managerPermissions });
     const now = new Date().toISOString();
-    const manager = { fullName, phone, email, walletMad: 0, ordersCount: 0, lastActivity: now, whatsappEnabled: Boolean(phone), role: "manager", managerPermissions: { orders, support }, accountStatus: "active", createdAt: now, createdBy: owner.uid };
+    const manager = { fullName, phone, email, walletMad: 0, ordersCount: 0, lastActivity: now, whatsappEnabled: Boolean(phone), role: "manager", managerPermissions, accountStatus: "active", createdAt: now, createdBy: owner.uid };
     await db.collection("customers").doc(user.uid).set(manager);
-    await db.collection("auditLogs").add({ action: "manager_created", managerUid: user.uid, actorUid: owner.uid, at: now, permissions: { orders, support } });
+    await db.collection("auditLogs").add({ action: "manager_created", managerUid: user.uid, actorUid: owner.uid, at: now, permissions: managerPermissions });
     return NextResponse.json({ manager: serializeManager(user.uid, manager), temporaryPasswordProvided: true }, { status: 201 });
   } catch (error) {
     const code = typeof error === "object" && error && "code" in error ? String(error.code) : "";

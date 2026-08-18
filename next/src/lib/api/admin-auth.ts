@@ -32,7 +32,7 @@ export async function requireOwner(request: NextRequest): Promise<DecodedIdToken
   return decoded?.role === "admin" || decoded?.role === "owner" ? decoded : null;
 }
 
-export async function requireStaff(request: NextRequest, permission?: "orders" | "support"): Promise<DecodedIdToken | null> {
+export async function requireStaff(request: NextRequest, permission?: "orders" | "support" | "catalog"): Promise<DecodedIdToken | null> {
   const decoded = await requireUser(request);
   if (decoded?.role === "admin" || decoded?.role === "owner") return decoded;
   if (decoded?.role !== "manager") return null;

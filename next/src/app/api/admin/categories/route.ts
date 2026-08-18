@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { adminDb } from "@/lib/firebase/admin";
-import { requireAdmin } from "@/lib/api/admin-auth";
+import { requireStaff } from "@/lib/api/admin-auth";
 
 const categorySchema = z.object({
   name: z.string().trim().min(2, "اسم التصنيف قصير جدًا").max(80, "اسم التصنيف طويل جدًا"),
@@ -13,7 +13,7 @@ const categorySchema = z.object({
 });
 
 export async function GET(request: NextRequest) {
-  const admin = await requireAdmin(request);
+  const admin = await requireStaff(request, "catalog");
   if (!admin) return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
 
   const db = adminDb();
@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const admin = await requireAdmin(request);
+  const admin = await requireStaff(request, "catalog");
   if (!admin) return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
 
   const db = adminDb();
@@ -49,6 +49,7 @@ export async function POST(request: NextRequest) {
     const category = {
       id: document.id,
       ...parsed.data,
+      ...(admin.role === "manager" ? { isActive: false } : {}),
       order: parsed.data.order ?? Date.now(),
       createdAt: now,
       updatedAt: now,

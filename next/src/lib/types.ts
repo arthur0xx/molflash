@@ -69,7 +69,7 @@ export interface Customer {
   blockedAt?: string;
   blockedReason?: string;
   role?: Role;
-  managerPermissions?: { orders: boolean; support: boolean };
+  managerPermissions?: { orders: boolean; support: boolean; catalog: boolean };
   onboardingCompletedAt?: string;
 }
 

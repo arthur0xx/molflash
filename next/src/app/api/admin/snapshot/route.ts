@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { emptyStoreSnapshot, getOrderStaffSnapshot, getSnapshot } from "@/lib/repository";
+import { emptyStoreSnapshot, getCatalogStaffSnapshot, getOrderStaffSnapshot, getSnapshot } from "@/lib/repository";
 import { requireStaff } from "@/lib/api/admin-auth";
 
 export async function GET(request: NextRequest) {
@@ -14,6 +14,10 @@ export async function GET(request: NextRequest) {
     const permissions = staff.managerPermissions as Record<string, unknown> | undefined;
     if (permissions?.orders === true) {
       return NextResponse.json({ snapshot: await getOrderStaffSnapshot(), scope: "orders" as const });
+    }
+
+    if (permissions?.catalog === true) {
+      return NextResponse.json({ snapshot: await getCatalogStaffSnapshot(), scope: "catalog" as const });
     }
 
     if (permissions?.support === true) {

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { FieldValue } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebase/admin";
-import { requireAdmin } from "@/lib/api/admin-auth";
+import { requireOwner, requireStaff } from "@/lib/api/admin-auth";
 import { deleteCloudinaryImage } from "@/lib/cloudinary";
 
 const dynamicFieldSchema = z.object({
@@ -58,7 +58,7 @@ function cleanupServiceAsset(publicId: string) {
 }
 
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  const admin = await requireAdmin(request);
+  const admin = await requireStaff(request, "catalog");
   if (!admin) return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
 
   const db = adminDb();
@@ -71,6 +71,11 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
     const parsed = updateServiceSchema.safeParse(await request.json());
     if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message || "بيانات الخدمة غير صحيحة" }, { status: 400 });
+
+    if (admin.role === "manager") {
+      const restrictedFields = ["priceMad", "compareAtPriceMad", "isActive", "promoteInCatalog"];
+      if (restrictedFields.some((field) => Object.prototype.hasOwnProperty.call(parsed.data, field))) return NextResponse.json({ error: "الأسعار والتخفيضات والإتاحة العامة يراجعها المالك فقط." }, { status: 403 });
+    }
 
     const reference = db.collection("services").doc(serviceId);
     const service = await reference.get();
@@ -119,7 +124,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 }
 
 export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  const admin = await requireAdmin(request);
+  const admin = await requireOwner(request);
   if (!admin) return NextResponse.json({ error: "غير مصرح" }, { status: 403 });
 
   const db = adminDb();
