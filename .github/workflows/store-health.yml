@@ -1,0 +1,40 @@
+name: Store health check
+
+on:
+  schedule:
+    - cron: "27 7 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: store-health
+  cancel-in-progress: false
+
+jobs:
+  check-production:
+    name: Check production storefront and admin barrier
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: next
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: next/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check production health
+        env:
+          STORE_URL: https://temporary-speedy-jade-mdelya8.vercel.app
+        run: npm run check:release -- "$STORE_URL"
