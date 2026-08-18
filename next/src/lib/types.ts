@@ -104,6 +104,8 @@ export interface Order {
   formData: Record<string, string>;
   statusHistory?: OrderStatusEvent[];
   notification?: OrderNotification;
+  archivedAt?: string;
+  archivedBy?: string;
 }
 
 export interface WalletEntry {
