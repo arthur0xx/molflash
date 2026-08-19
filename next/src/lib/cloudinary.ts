@@ -4,6 +4,7 @@ const serviceFolder = "chrigsm/catalog";
 const legacyServiceFolder = "chrigsm/services";
 const profileFolder = "chrigsm/profiles";
 const paymentProofFolder = "chrigsm/payment-proofs";
+const blogFolder = "chrigsm/blog";
 
 export type CloudinaryServerConfig = {
   cloudName: string;
@@ -11,7 +12,7 @@ export type CloudinaryServerConfig = {
   apiSecret: string;
 };
 
-export type MediaKind = "service" | "profile" | "payment_proof";
+export type MediaKind = "service" | "profile" | "payment_proof" | "blog";
 type CloudinaryDeliveryType = "upload" | "authenticated";
 
 export type CloudinaryUploadTarget = {
@@ -43,6 +44,10 @@ export function paymentProofPublicId(paymentReference: string) {
   return `${paymentProofFolder}/${safeAssetSegment(paymentReference, "payment")}/receipt`;
 }
 
+export function blogImagePublicId(title: string, postId: string) {
+  return `${blogFolder}/${safeAssetSegment(postId, "draft")}/${safeAssetSegment(title, "article")}`;
+}
+
 function cloudinaryDeliveryType(kind: MediaKind): CloudinaryDeliveryType {
   return kind === "payment_proof" ? "authenticated" : "upload";
 }
@@ -51,7 +56,8 @@ function isManagedPublicId(publicId: string, kind?: MediaKind) {
   const isServiceAsset = publicId.startsWith(`${serviceFolder}/`) || publicId.startsWith(`${legacyServiceFolder}/`);
   const isProfileAsset = publicId.startsWith(`${profileFolder}/`);
   const isPaymentProofAsset = publicId.startsWith(`${paymentProofFolder}/`);
-  const permitted = kind === "service" ? isServiceAsset : kind === "profile" ? isProfileAsset : kind === "payment_proof" ? isPaymentProofAsset : publicId.startsWith("chrigsm/");
+  const isBlogAsset = publicId.startsWith(`${blogFolder}/`);
+  const permitted = kind === "service" ? isServiceAsset : kind === "profile" ? isProfileAsset : kind === "payment_proof" ? isPaymentProofAsset : kind === "blog" ? isBlogAsset : publicId.startsWith("chrigsm/");
   return permitted && /^[a-z0-9/_-]{5,220}$/.test(publicId);
 }
 

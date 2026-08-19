@@ -21,6 +21,16 @@ service cloud.firestore {
       // تتطلب جميع كتابات CMC تحققًا خادميًا وسجل تدقيق؛ لا كتابة مباشرة من العميل.
       allow write: if false;
     }
+    match /blogCategories/{categoryId} {
+      allow read: if resource.data.isActive == true || owner();
+      // التصنيفات تعدل عبر مسارات المالك الخادمية لتسجيل التدقيق ومنع النشر العرضي.
+      allow write: if false;
+    }
+    match /blogPosts/{postId} {
+      allow read: if resource.data.status == 'published' || owner();
+      // المقالات والمسودات لا تتغير من SDK مباشر، حتى لا تتجاوز التحقق من slug والمصادر والنشر.
+      allow write: if false;
+    }
     // مراجع المورد والكلفة والربحية لا تمر إلى العميل؛ تعدل فقط عبر Firebase Admin داخل المسارات الخادمية.
     match /servicePrivate/{serviceId} {
       allow read, write: if false;
@@ -54,6 +64,8 @@ service cloud.firestore {
       allow write: if false;
     }
     match /auditLogs/{logId} { allow read: if owner(); allow write: if false; }
+    // عدادات موصل AI تشغيلية، وتُحدَّث ذريًا عبر Firebase Admin فقط لحماية سقف الاستعمال اليومي.
+    match /blogAiUsage/{usageId} { allow read, write: if false; }
     // رموز تأكيد الهاتف وسجل قنوات الإشعار يحتويان بيانات تشغيلية حساسة؛ لا يُسمح لهما بأي وصول SDK مباشر.
     match /phoneVerificationChallenges/{challengeId} { allow read, write: if false; }
     match /notificationLogs/{notificationId} { allow read, write: if false; }

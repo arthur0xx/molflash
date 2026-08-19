@@ -16,6 +16,52 @@ export interface Category {
   isActive: boolean;
 }
 
+export type BlogPostStatus = "draft" | "published" | "archived";
+export type BlogLayout = "standard" | "guide" | "comparison";
+
+export interface BlogCategory {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string;
+  color: string;
+  order: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BlogSource {
+  title: string;
+  url: string;
+}
+
+export interface BlogPost {
+  id: string;
+  title: string;
+  slug: string;
+  excerpt: string;
+  markdown: string;
+  categoryId: string;
+  tags: string[];
+  serviceIds: string[];
+  sources: BlogSource[];
+  coverImageUrl?: string;
+  coverImagePublicId?: string;
+  coverImageAlt?: string;
+  seoTitle?: string;
+  seoDescription?: string;
+  canonicalUrl?: string;
+  noIndex?: boolean;
+  layout: BlogLayout;
+  status: BlogPostStatus;
+  createdAt: string;
+  updatedAt: string;
+  publishedAt?: string;
+  createdBy: string;
+  updatedBy: string;
+}
+
 export interface DynamicField {
   id: string;
   label: string;

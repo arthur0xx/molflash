@@ -28,6 +28,11 @@ async function seed() {
     await setDoc(doc(database, "payments", "CHR-CUSTOMER2"), { customerId: "customer-two", purpose: "order", orderId: "order-two", amountMad: 80, status: "manual_transfer_pending" });
     await setDoc(doc(database, "supportTickets", "support-one"), { customerId: "customer-one", subject: "رسالة العميل الأول", message: "تفاصيل اختبار الدعم" });
     await setDoc(doc(database, "supportTickets", "support-two"), { customerId: "customer-two", subject: "رسالة العميل الثاني", message: "تفاصيل اختبار الدعم" });
+    await setDoc(doc(database, "blogCategories", "blog-live"), { name: "شروحات", isActive: true });
+    await setDoc(doc(database, "blogCategories", "blog-hidden"), { name: "مخفي", isActive: false });
+    await setDoc(doc(database, "blogPosts", "post-published"), { title: "مقال منشور", status: "published" });
+    await setDoc(doc(database, "blogPosts", "post-draft"), { title: "مسودة خاصة", status: "draft" });
+    await setDoc(doc(database, "blogAiUsage", "2026-08-19-owner-user"), { uid: "owner-user", date: "2026-08-19", count: 1 });
   });
 }
 
@@ -55,6 +60,11 @@ async function run() {
     await assertFails(getDoc(doc(visitor, "paymentMethods", "cash-plus")));
     await assertFails(getDoc(doc(visitor, "payments", "CHR-CUSTOMER1")));
     await assertFails(getDoc(doc(visitor, "supportTickets", "support-one")));
+    await assertSucceeds(getDoc(doc(visitor, "blogCategories", "blog-live")));
+    await assertFails(getDoc(doc(visitor, "blogCategories", "blog-hidden")));
+    await assertSucceeds(getDoc(doc(visitor, "blogPosts", "post-published")));
+    await assertFails(getDoc(doc(visitor, "blogPosts", "post-draft")));
+    await assertFails(getDoc(doc(visitor, "blogAiUsage", "2026-08-19-owner-user")));
     await assertFails(setDoc(doc(visitor, "categories", "cat-visitor"), { name: "غير مسموح" }));
 
     const customerOne = environment.authenticatedContext("customer-one", { role: "customer" }).firestore();
@@ -76,6 +86,9 @@ async function run() {
     await assertFails(setDoc(doc(customerOne, "services", "svc-client-write"), { isActive: true }));
     await assertFails(getDoc(doc(customerOne, "servicePrivate", "svc-live")));
     await assertFails(setDoc(doc(customerOne, "servicePrivate", "svc-live"), { supplierCostSnapshot: 0 }, { merge: true }));
+    await assertSucceeds(getDoc(doc(customerOne, "blogPosts", "post-published")));
+    await assertFails(getDoc(doc(customerOne, "blogPosts", "post-draft")));
+    await assertFails(getDoc(doc(customerOne, "blogAiUsage", "2026-08-19-owner-user")));
 
     const blockedCustomer = environment.authenticatedContext("customer-two", { role: "customer" }).firestore();
     await assertFails(getDoc(doc(blockedCustomer, "customers", "customer-two")));
@@ -100,6 +113,10 @@ async function run() {
     await assertFails(setDoc(doc(adminClient, "walletEntries", "wallet-admin-direct"), { customerId: "customer-one", amountMad: 1, reason: "يجب أن يفشل" }));
     await assertFails(setDoc(doc(adminClient, "paymentMethods", "cash-plus"), { status: "disabled" }, { merge: true }));
     await assertFails(setDoc(doc(adminClient, "payments", "CHR-CUSTOMER1"), { status: "confirmed" }, { merge: true }));
+    await assertSucceeds(getDoc(doc(adminClient, "blogCategories", "blog-hidden")));
+    await assertSucceeds(getDoc(doc(adminClient, "blogPosts", "post-draft")));
+    await assertFails(getDoc(doc(adminClient, "blogAiUsage", "2026-08-19-owner-user")));
+    await assertFails(setDoc(doc(adminClient, "blogPosts", "post-admin-direct"), { status: "published" }));
 
     const ownerClient = environment.authenticatedContext("owner-user", { role: "owner" }).firestore();
     await assertSucceeds(getDoc(doc(ownerClient, "customers", "customer-one")));
@@ -107,6 +124,8 @@ async function run() {
     await assertSucceeds(getDoc(doc(ownerClient, "paymentMethods", "cash-plus")));
     await assertSucceeds(getDoc(doc(ownerClient, "payments", "CHR-CUSTOMER1")));
     await assertFails(setDoc(doc(ownerClient, "customers", "customer-one"), { walletMad: 9999 }, { merge: true }));
+    await assertSucceeds(getDoc(doc(ownerClient, "blogPosts", "post-draft")));
+    await assertFails(getDoc(doc(ownerClient, "blogAiUsage", "2026-08-19-owner-user")));
 
     const managerClient = environment.authenticatedContext("manager-user", { role: "manager", managerPermissions: { orders: true, support: true } }).firestore();
     await assertFails(getDoc(doc(managerClient, "customers", "customer-one")));
@@ -115,7 +134,7 @@ async function run() {
     await assertFails(getDoc(doc(managerClient, "paymentMethods", "cash-plus")));
     await assertFails(getDoc(doc(managerClient, "payments", "CHR-CUSTOMER1")));
 
-    console.log("Firestore rules passed: visitor, customer isolation, blocked-account access, owner-only payment reads, manager SDK denial, and direct payment/wallet/CMC writes are protected.");
+    console.log("Firestore rules passed: visitor and customer isolation, unpublished blog protection, AI usage SDK denial, owner-only payment reads, manager SDK denial, and direct payment/wallet/CMC writes are protected.");
   } finally {
     await environment.cleanup();
   }

@@ -2,13 +2,13 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { Grid2X2, Home, ShoppingBag, UserRound } from "lucide-react";
+import { BookOpen, Grid2X2, Home, ShoppingBag, UserRound } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { getAuthSession, type AuthSession } from "@/lib/auth";
 import { getCartItems } from "@/lib/cart";
 
-const navigation = [{ href: "/", label: "الرئيسية" }, { href: "/catalog", label: "الخدمات" }];
+const navigation = [{ href: "/", label: "الرئيسية" }, { href: "/catalog", label: "الخدمات" }, { href: "/blog", label: "المدونة" }];
 
 function isCurrent(pathname: string, href: string) {
   return href === "/" ? pathname === href : pathname.startsWith(href);
@@ -53,6 +53,6 @@ export function BottomNav() {
   const pathname = usePathname();
   const session = useSession();
   const accountHref = session?.role === "admin" || session?.role === "manager" ? "/admin" : session ? "/account" : "/login";
-  const items = [{ href: "/", label: "الرئيسية", icon: <Home size={18} /> }, { href: "/catalog", label: "الخدمات", icon: <Grid2X2 size={18} /> }, { href: accountHref, label: session?.role === "admin" || session?.role === "manager" ? "الإدارة" : session ? "حسابي" : "دخول", icon: <UserRound size={18} /> }];
+  const items = [{ href: "/", label: "الرئيسية", icon: <Home size={18} /> }, { href: "/catalog", label: "الخدمات", icon: <Grid2X2 size={18} /> }, { href: "/blog", label: "المدونة", icon: <BookOpen size={18} /> }, { href: accountHref, label: session?.role === "admin" || session?.role === "manager" ? "الإدارة" : session ? "حسابي" : "دخول", icon: <UserRound size={18} /> }];
   return <nav className="bottom-nav" aria-label="تنقل الهاتف">{items.map((item) => <Link key={item.href} href={item.href} className={isCurrent(pathname, item.href) ? "nav-current" : ""} aria-current={isCurrent(pathname, item.href) ? "page" : undefined}>{item.icon}<span>{item.label}</span></Link>)}</nav>;
 }

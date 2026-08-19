@@ -37,7 +37,7 @@ export async function requestSignedMediaUpload(token: string, path: string, body
   return result as SignedMediaUpload;
 }
 
-export async function uploadSignedMediaImage(file: File, signed: SignedMediaUpload, expectedPrefix: "chrigsm/catalog/" | "chrigsm/profiles/" | "chrigsm/payment-proofs/", label: string): Promise<UploadedMediaAsset> {
+export async function uploadSignedMediaImage(file: File, signed: SignedMediaUpload, expectedPrefix: "chrigsm/catalog/" | "chrigsm/profiles/" | "chrigsm/payment-proofs/" | "chrigsm/blog/", label: string): Promise<UploadedMediaAsset> {
   const validationError = validateMediaImage(file);
   if (validationError) throw new Error(validationError);
 

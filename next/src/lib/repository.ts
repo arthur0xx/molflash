@@ -1,7 +1,7 @@
 import "server-only";
 
 import { adminDb } from "./firebase/admin";
-import type { OrderStatus, StoreSnapshot } from "./types";
+import type { BlogCategory, BlogPost, OrderStatus, Service, StoreSnapshot } from "./types";
 
 export type StorefrontSnapshot = Pick<StoreSnapshot, "categories" | "services">;
 
@@ -114,6 +114,53 @@ export async function getOrderStaffSnapshot(): Promise<StoreSnapshot> {
     walletEntries: [],
     paymentMethods: [],
     payments: [],
+  };
+}
+
+export type PublicBlogSnapshot = { categories: BlogCategory[]; posts: BlogPost[]; services: Service[] };
+
+export async function getPublicBlogSnapshot(): Promise<PublicBlogSnapshot> {
+  const db = adminDb();
+  if (!db) return { categories: [], posts: [], services: [] };
+
+  const [categories, posts, services] = await Promise.all([
+    db.collection("blogCategories").orderBy("order", "asc").get(),
+    db.collection("blogPosts").where("status", "==", "published").get(),
+    db.collection("services").get(),
+  ]);
+
+  const publicCategories = categories.docs.map((document) => ({ id: document.id, ...document.data() })) as BlogCategory[];
+  const publishedPosts = posts.docs.map((document) => ({ id: document.id, ...document.data() })) as BlogPost[];
+  const activeServices = services.docs.map((document) => ({ id: document.id, ...document.data() })) as Service[];
+  return {
+    categories: publicCategories.filter((category) => category.isActive),
+    posts: publishedPosts.sort((left, right) => String(right.publishedAt || right.updatedAt).localeCompare(String(left.publishedAt || left.updatedAt))),
+    services: activeServices.filter((service) => service.isActive),
+  };
+}
+
+export async function getPublicBlogPostBySlug(slug: string): Promise<BlogPost | null> {
+  const db = adminDb();
+  if (!db) return null;
+  const result = await db.collection("blogPosts").where("slug", "==", slug).limit(1).get();
+  const document = result.docs[0];
+  if (!document) return null;
+  const post = { id: document.id, ...document.data() } as BlogPost;
+  return post.status === "published" ? post : null;
+}
+
+export async function getBlogAdminSnapshot() {
+  const db = adminDb();
+  if (!db) return { categories: [] as BlogCategory[], posts: [] as BlogPost[], services: [] as Service[] };
+  const [categories, posts, services] = await Promise.all([
+    db.collection("blogCategories").orderBy("order", "asc").get(),
+    db.collection("blogPosts").orderBy("updatedAt", "desc").get(),
+    db.collection("services").orderBy("title", "asc").get(),
+  ]);
+  return {
+    categories: categories.docs.map((document) => ({ id: document.id, ...document.data() })) as BlogCategory[],
+    posts: posts.docs.map((document) => ({ id: document.id, ...document.data() })) as BlogPost[],
+    services: services.docs.map((document) => ({ id: document.id, ...document.data() })) as Service[],
   };
 }
 
