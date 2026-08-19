@@ -5,10 +5,10 @@ import { getStorefrontSnapshot } from "@/lib/repository";
 import { safeJsonLd } from "@/lib/seo";
 
 export const metadata: Metadata = {
-  title: "كتالوج خدمات GSM الرقمية",
-  description: "استكشف خدمات ChriGsm الرقمية للتفعيل والأدوات وخدمات الأجهزة، ثم تابع طلبك من حسابك.",
+  title: "تفعيل أدوات صيانة الهواتف وخدمات GSM الرقمية",
+  description: "استكشف خدمات ChriGsm الرقمية لتفعيل واشتراكات أدوات صيانة الهواتف وبرامج المخططات، ثم تابع طلبك من حسابك.",
   alternates: { canonical: "/catalog" },
-  openGraph: { title: "كتالوج خدمات GSM الرقمية | ChriGsm", description: "استكشف خدمات GSM الرقمية المتاحة في ChriGsm.", url: "/catalog" },
+  openGraph: { title: "تفعيل أدوات صيانة الهواتف وخدمات GSM | ChriGsm", description: "استكشف خدمات تفعيل واشتراكات أدوات صيانة الهواتف الرقمية المتاحة في ChriGsm.", url: "/catalog" },
 };
 
 export default async function CatalogPage({ searchParams }: { searchParams: Promise<{ category?: string }> }) {
@@ -20,9 +20,9 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
   const structuredData = {
     "@context": "https://schema.org",
     "@type": "CollectionPage",
-    name: "كتالوج خدمات ChriGsm",
+    name: "كتالوج تفعيل أدوات صيانة الهواتف وخدمات ChriGsm",
     url: `${siteUrl}/catalog`,
-    description: "كتالوج خدمات GSM الرقمية المتاحة في ChriGsm.",
+    description: "كتالوج خدمات تفعيل واشتراكات أدوات صيانة الهواتف وGSM الرقمية المتاحة في ChriGsm.",
     numberOfItems: services.length,
   };
 

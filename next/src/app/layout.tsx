@@ -5,8 +5,8 @@ import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
 import { AppLoadingSplash } from "@/components/app-loading-splash";
 
 const siteUrl = new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://temporary-speedy-jade-mdelya8.vercel.app");
-const title = "ChriGsm | خدمات GSM الرقمية";
-const description = "ChriGsm متجر مغربي لشراء خدمات GSM الرقمية: التفعيل، الأدوات، وخدمات الأجهزة مع متابعة واضحة للطلبات.";
+const title = "ChriGsm | تفعيل أدوات صيانة الهواتف وGSM بالمغرب";
+const description = "ChriGsm منصة مغربية لخدمات GSM الرقمية: تفعيل واشتراكات أدوات صيانة الهواتف وبرامج المخططات، مع طلب واضح ومتابعة آمنة.";
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -23,7 +23,7 @@ export const metadata: Metadata = {
   },
   description,
   applicationName: "ChriGsm",
-  keywords: ["ChriGsm", "GSM المغرب", "خدمات GSM", "تفعيل GSM", "أدوات GSM", "خدمات رقمية"],
+  keywords: ["ChriGsm", "GSM المغرب", "تفعيل أدوات GSM", "برامج صيانة الهواتف", "برامج مخططات الهواتف", "خدمات صيانة الهواتف الرقمية"],
   authors: [{ name: "ChriGsm" }],
   creator: "ChriGsm",
   publisher: "ChriGsm",
@@ -42,7 +42,7 @@ export const metadata: Metadata = {
     siteName: "ChriGsm",
     title,
     description,
-    images: [{ url: "/brand/cg-social.png", width: 1200, height: 630, alt: "ChriGsm — خدمات GSM الرقمية" }],
+    images: [{ url: "/brand/cg-social.png", width: 1200, height: 630, alt: "ChriGsm — تفعيل أدوات صيانة الهواتف وخدمات GSM الرقمية" }],
   },
   twitter: {
     card: "summary_large_image",

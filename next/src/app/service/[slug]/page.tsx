@@ -45,16 +45,32 @@ export default async function ServicePage({ params }: ServicePageProps) {
   const category = snapshot.categories.find((item) => item.id === service.categoryId);
   const hasDiscount = typeof service.compareAtPriceMad === "number" && service.compareAtPriceMad > service.priceMad;
   const discountPercent = hasDiscount ? Math.round(((service.compareAtPriceMad! - service.priceMad) / service.compareAtPriceMad!) * 100) : 0;
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://chrigsm-next-arthurs-projects-713d8d1f.vercel.app";
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://temporary-speedy-jade-mdelya8.vercel.app";
+  const serviceUrl = `${siteUrl}/service/${service.slug}`;
   const structuredData = {
     "@context": "https://schema.org",
-    "@type": "Service",
-    name: service.title,
-    description: service.description,
-    serviceType: category?.name || "خدمات GSM الرقمية",
-    provider: { "@type": "Organization", name: "ChriGsm", url: siteUrl },
-    areaServed: "MA",
-    offers: { "@type": "Offer", price: service.priceMad, priceCurrency: "MAD", availability: "https://schema.org/InStock", url: `${siteUrl}/service/${service.slug}` },
+    "@graph": [
+      {
+        "@type": "Service",
+        "@id": `${serviceUrl}#service`,
+        name: service.title,
+        description: service.description,
+        url: serviceUrl,
+        image: service.imageUrl || `${siteUrl}/brand/cg-social.png`,
+        serviceType: category?.name || "خدمات GSM الرقمية",
+        provider: { "@type": "Organization", name: "ChriGsm", url: siteUrl },
+        areaServed: "MA",
+        offers: { "@type": "Offer", price: service.priceMad, priceCurrency: "MAD", availability: "https://schema.org/InStock", url: serviceUrl },
+      },
+      {
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          { "@type": "ListItem", position: 1, name: "الرئيسية", item: siteUrl },
+          { "@type": "ListItem", position: 2, name: "الكتالوج", item: `${siteUrl}/catalog` },
+          { "@type": "ListItem", position: 3, name: service.title, item: serviceUrl },
+        ],
+      },
+    ],
   };
 
   return <><script type="application/ld+json" dangerouslySetInnerHTML={{ __html: safeJsonLd(structuredData) }} /><Header /><main className="store-shell detail-shell">
