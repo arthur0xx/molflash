@@ -1,6 +1,7 @@
 import "server-only";
 
 import { adminDb } from "@/lib/firebase/admin";
+import { notifyCustomerExpoPush } from "@/lib/expo-push";
 import { sendWhatsAppTemplate, whatsappConfigured } from "@/lib/whatsapp";
 
 type OrderNotificationEvent = "received" | "processing" | "completed" | "delivery_added";
@@ -66,5 +67,5 @@ async function sendAdminWhatsApp(input: NotifyOrderInput) {
 }
 
 export async function notifyOrderEvent(input: NotifyOrderInput) {
-  await Promise.allSettled([sendCustomerWhatsApp(input), sendAdminWhatsApp(input)]);
+  await Promise.allSettled([sendCustomerWhatsApp(input), sendAdminWhatsApp(input), notifyCustomerExpoPush(input)]);
 }

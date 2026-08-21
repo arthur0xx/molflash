@@ -40,6 +40,10 @@ service cloud.firestore {
       // تعديلات الرصيد تتم ذريًا في مسار خادمي يضيف قيد محفظة وسجل تدقيق؛ لا كتابة مباشرة من العميل حتى للمدير.
       allow write: if false;
     }
+    // رموز Expo قابلة لإرسال إشعارات لهذا الجهاز؛ تُدار من API خادمي موثق فقط ولا تُكشف لأي SDK.
+    match /customers/{customerId}/pushTokens/{tokenId} {
+      allow read, write: if false;
+    }
     match /orders/{orderId} {
       allow read: if owner() || (activeCustomer() && resource.data.customerId == request.auth.uid);
       allow write: if false;
